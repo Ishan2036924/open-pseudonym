@@ -116,7 +116,7 @@ test("tool calls: a handle is filled only where the app's sink says it belongs",
     });
     return { attempt, typed, mock };
   };
-  const ok = await run("https://login.acme.com/verify");
+  const ok = await run("https://acme.com/verify");
   await ok.attempt();
   assert.deepEqual(ok.typed, ["482913"]);
   assert.ok(!sentText(ok.mock).includes("482913"));
@@ -127,15 +127,38 @@ test("tool calls: a handle is filled only where the app's sink says it belongs",
   assert.deepEqual(bad.typed, [], "the code never reached the tool");
 });
 
-test("checkEgress stops a request that would carry a known real value", async () => {
+test("the egress check is on by default and stops a request that would carry a known real value", async () => {
   const s = session();
   s.mask("Dana Reyes");
   const mock = new MockLanguageModelV4({ doGenerate: { content: [{ type: "text", text: "hi" }], finishReason: stop, usage, warnings: [] } as any });
   // provider options are not rewritten, so a real value placed there reaches the check
-  const model = wrapLanguageModel({ model: mock, middleware: pseudonymMiddleware({ session: s, checkEgress: true }) });
+  const model = wrapLanguageModel({ model: mock, middleware: pseudonymMiddleware({ session: s }) });
   await assert.rejects(
     generateText({ model, messages: [{ role: "user", content: [{ type: "text", text: "hello" }], providerOptions: { x: { who: "Dana Reyes" } } }] }),
     EgressLeak,
   );
   assert.equal(mock.doGenerateCalls.length, 0);
+  // the check can be turned off
+  const open = wrapLanguageModel({ model: mock, middleware: pseudonymMiddleware({ session: s, checkEgress: false }) });
+  await generateText({ model: open, messages: [{ role: "user", content: [{ type: "text", text: "hello" }], providerOptions: { x: { who: "Dana Reyes" } } }] });
+  assert.equal(mock.doGenerateCalls.length, 1);
+});
+
+test("masking runs twice: a name learned from a later message is masked in an earlier one", async () => {
+  const s = new Session("strict", { vault: new Vault(Buffer.alloc(32, 1), NOW), clock: () => NOW });
+  const mock = new MockLanguageModelV4({
+    doGenerate: { content: [{ type: "text", text: "ok" }], finishReason: stop, usage, warnings: [] } as any,
+  });
+  const model = wrapLanguageModel({ model: mock, middleware: pseudonymMiddleware({ session: s }) });
+  // "Dana" has no cue in the first message; the second one introduces her with a cue
+  await generateText({
+    model,
+    messages: [
+      { role: "user", content: "Is Dana free on Thursday?" },
+      { role: "assistant", content: "Not sure." },
+      { role: "user", content: "Hi Dana Reyes, please confirm." },
+    ],
+  });
+  const sent = sentText(mock);
+  assert.ok(!sent.includes("Dana") && !sent.includes("Reyes"), sent);
 });

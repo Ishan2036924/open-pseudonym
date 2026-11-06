@@ -2,7 +2,7 @@
 // The shared vectors compare bytes, so these are worth keeping exact.
 
 // What Python's str.split() and str.strip() treat as whitespace.
-const WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
+export const WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
 const WS_RUN = new RegExp(`[${WS}]+`, "u");
 const WS_EDGES = new RegExp(`^[${WS}]+|[${WS}]+$`, "gu");
 const WS_START = new RegExp(`^[${WS}]+`, "u");
@@ -157,4 +157,41 @@ export function isPlainObject(v: unknown): v is Record<string, any> {
 /** JSON.stringify never returns undefined for the values we pass; this keeps the type honest. */
 export function toJson(v: unknown): string {
   return JSON.stringify(v) as string;
+}
+
+/** Python's `base64.b64decode(s, validate=False)`: characters outside the alphabet are skipped, padding ends the
+ * data, and a leftover partial group or any non-ASCII character is an error (null here). */
+export function lenientBase64(s: string): Uint8Array | null {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  if (/[^\x00-\x7f]/.test(s)) return null; // Python refuses non-ASCII text outright
+  const out: number[] = [];
+  let quad = 0;
+  let left = 0;
+  let pads = 0;
+  for (const ch of s) {
+    if (ch === "=") {
+      if (quad >= 2 && quad + ++pads >= 4) return Uint8Array.from(out);
+      continue;
+    }
+    const v = alphabet.indexOf(ch);
+    if (v < 0) continue;
+    pads = 0;
+    if (quad === 0) {
+      quad = 1;
+      left = v;
+    } else if (quad === 1) {
+      quad = 2;
+      out.push((left << 2) | (v >> 4));
+      left = v & 0xf;
+    } else if (quad === 2) {
+      quad = 3;
+      out.push((left << 4) | (v >> 2));
+      left = v & 3;
+    } else {
+      quad = 0;
+      out.push((left << 6) | v);
+      left = 0;
+    }
+  }
+  return quad === 0 ? Uint8Array.from(out) : null;
 }

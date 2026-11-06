@@ -12,7 +12,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { abaOk, luhnOk, ssnOk } from "./checks.ts";
 import { pools } from "./data.ts";
 import * as dates from "./dates.ts";
-import { check as egressCheck, EgressLog, type Leak } from "./egress.ts";
+import { check as egressCheck, EgressLeak, EgressLog, knownMode, type Leak } from "./egress.ts";
 import * as fakes from "./fakes.ts";
 import { Ctx, fillTemplate } from "./fakes.ts";
 import { FF1 } from "./fpe.ts";
@@ -22,23 +22,135 @@ import { KnownDetector, PatternDetector, resolve, type Detector, type Form, type
 import type { PatternSpec } from "./data.ts";
 import { Policy, loadProfile, type Rule } from "./policy.ts";
 import { apply, Restorer, StreamRestorer } from "./restore.ts";
-import { CASELESS_TYPES, DIGIT_TYPES, digitsOf, normalize } from "./types.ts";
+import { DIGIT_TYPES, digitsOf, normalize } from "./types.ts";
 import { Vault, type Entry } from "./vault.ts";
-import { findAll, stripWs, toJson } from "./util.ts";
+import { cpLength, findAll, lenientBase64, splitWs, stripWs, toJson, truthy, WS } from "./util.ts";
 
+const MAX_TEXT_TTL = 3600; // an expiry read from text alone is capped at one hour
 const GENERAL: Record<string, string> = {
   PERSON: "someone", ORG: "an organization", LOCATION: "a place", ADDRESS: "a street address",
   EMAIL: "an email address", PHONE: "a phone number", URL: "a web link", IP_ADDRESS: "an IP address",
 };
 const MONEY_PREFIX = /^([$€£])( ?)([0-9][0-9,]*)(\.[0-9]{2})?$/;
 const MONEY_SUFFIX = /^([0-9][0-9,]*)(\.[0-9]{2})?( ?)(USD|EUR|GBP|dollars|euros)$/;
-// keys whose string values are structure, not content, when masking chat messages
+// Keys whose string values must reach the provider exactly as written, or the protocol breaks: ids that come back,
+// roles, the model name, media types, and signed or encrypted blobs. Masking leaves them alone; the egress check still
+// reads them, so personal data hidden under one of these names stops the request instead of slipping out.
 const SKIP_KEYS: ReadonlySet<string> = new Set([
-  "role", "type", "id", "name", "tool_call_id", "tool_use_id", "call_id", "model", "image_url", "source", "data",
-  "media_type", "signature", "cache_control", "status", "finish_reason", "stop_reason", "object", "index", "format",
-  "detail", "mime_type",
+  "role", "type", "id", "tool_call_id", "tool_use_id", "call_id", "media_type", "mime_type", "mimeType",
+  "cache_control",
+  // the same structure as the Vercel AI SDK spells it
+  "toolCallId", "toolName", "mediaType",
 ]);
+// Only at the top of a request body: the model name.
+const TOP_KEYS: ReadonlySet<string> = new Set(["model"]);
+const REASONING_TYPES: ReadonlySet<string> = new Set(["thinking", "redacted_thinking", "reasoning"]);
 const NO_KEYS: ReadonlySet<string> = new Set();
+// [A-Za-z0-9+/=_\-\s] with \s meaning what Python's \s does
+const BASE64 = new RegExp(`^[A-Za-z0-9+/=_\\-${WS}]*$`, "u");
+
+/** Real base64 payloads (images, PDFs) are not text we can mask; leave them byte for byte. Only strings that really
+ * are base64 count, so text dressed up as a data: URL is still masked and checked. */
+export function isBinary(key: string | null, value: string, parent: Record<string, any> | null): boolean {
+  if (value.startsWith("data:") && [...value.slice(0, 200)].slice(0, 100).join("").includes(";base64,")) {
+    return BASE64.test(value.slice(value.indexOf(";base64,") + ";base64,".length));
+  }
+  if (key === "data" && parent !== null && parent.type === "base64") return BASE64.test(value);
+  return false;
+}
+
+/** Model reasoning blocks are signed or encrypted by the provider and must go back unchanged. The model only ever
+ * saw stand-ins, so they hold stand-ins, never real values. Only inside such a block: a `signature` key anywhere
+ * else is ordinary content. */
+export function isSignedThinking(key: string | null, parent: Record<string, any> | null): boolean {
+  if (parent === null || typeof parent.type !== "string" || !REASONING_TYPES.has(parent.type)) return false;
+  return key === "thinking" || key === "signature" || key === "encrypted_content" || (key === "data" && parent.type === "redacted_thinking");
+}
+
+// Python's truthiness, where a parsed JSON number may arrive wrapped (see JsonNumber below)
+const pyTruthy = (x: unknown): boolean => (x instanceof JsonNumber ? x.value !== 0 : truthy(x));
+
+const TEXT_MEDIA = /^(text\/|application\/(json|xml|csv|x-yaml|yaml))/iu;
+
+/** Base64 that holds text (a data:text/plain URL, a text document sent as base64): returns [prefix, media type,
+ * decoded text] so it can be masked and checked like any text. Null for real binary such as images and PDFs. */
+export function textBase64(key: string | null, value: string, parent: Record<string, any> | null): [string, string, string] | null {
+  let head: string | null;
+  let body: string;
+  let media: unknown;
+  if (value.startsWith("data:") && [...value.slice(0, 200)].slice(0, 100).join("").includes(";base64,")) {
+    const at = value.indexOf(";base64,");
+    head = value.slice(0, at);
+    body = value.slice(at + ";base64,".length);
+    media = head.slice(5);
+  } else if (key === "data" && parent !== null && parent.type === "base64") {
+    head = null;
+    body = value;
+    media = pyTruthy(parent.media_type) ? parent.media_type : pyTruthy(parent.mediaType) ? parent.mediaType : "";
+  } else {
+    return null;
+  }
+  // Python's case-insensitive match also treats the dotless and dotted capital I as an i
+  if (typeof media !== "string" || !TEXT_MEDIA.test(media.replace(/[\u0131\u0130]/g, "i"))) return null;
+  const bytes = lenientBase64(body);
+  if (bytes === null) return null;
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+  return [head !== null ? head + ";base64," : "", media, text];
+}
+
+// a JSON number that remembers the digits it was written with, so a long card number is not rounded away
+class JsonNumber {
+  readonly source: string;
+  readonly value: number;
+
+  constructor(source: string, value: number) {
+    this.source = source;
+    this.value = value;
+  }
+}
+
+/**
+ * Everything in a payload a person could have written, as text, for the detection pass: for JSON every key and every
+ * string except the top-level model name, signed or encrypted reasoning and real binary base64 (text sent as base64
+ * is decoded and read). Plain text is used as is.
+ */
+export function contentText(payload: Uint8Array | string): string {
+  const raw = typeof payload === "string" ? payload : new TextDecoder("utf-8", { ignoreBOM: true }).decode(payload);
+  let doc: unknown;
+  try {
+    const reviver = (_key: string, value: unknown, ctx?: { source?: string }): unknown =>
+      typeof value === "number" && ctx?.source !== undefined ? new JsonNumber(ctx.source, value) : value;
+    doc = (JSON.parse as (text: string, reviver: unknown) => unknown)(raw, reviver);
+  } catch {
+    return raw;
+  }
+  const out: string[] = [];
+  const stack: [unknown, string | null, Record<string, any> | null][] = [[doc, null, null]];
+  while (stack.length > 0) { // a loop, not recursion, so deeply nested JSON cannot crash the check
+    const [v, key, parent] = stack.pop()!;
+    if (typeof v === "string") {
+      if ((key !== null && TOP_KEYS.has(key) && parent === doc) || isSignedThinking(key, parent)) continue;
+      const decoded = textBase64(key, v, parent);
+      if (decoded !== null) out.push(decoded[2]);
+      else if (!isBinary(key, v, parent)) out.push(v);
+    } else if (Array.isArray(v)) {
+      for (const x of v) stack.push([x, key, parent]);
+    } else if (v instanceof JsonNumber) {
+      out.push(/^-?[0-9]+$/.test(v.source) ? BigInt(v.source).toString() : String(v.value));
+    } else if (v !== null && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) {
+        out.push(k);
+        stack.push([x, k, v as Record<string, any>]);
+      }
+    }
+  }
+  return out.join("\n");
+}
 
 /** The policy says this type must never reach the model, so the request stops here. */
 export class RefusedData extends Error {
@@ -88,6 +200,11 @@ export interface SessionOptions {
   /** Asked before a handle is filled in somewhere new (or always, when the rule says `ask`). */
   approve?: Approve;
   sessionId?: string;
+  /**
+   * By default every input is treated as real: a real name that happens to equal an earlier fake is masked like any
+   * other value. Set this to true only if you feed back text that already went through `mask`.
+   */
+  maskedInput?: boolean;
 }
 
 export class Session {
@@ -100,6 +217,7 @@ export class Session {
   readonly clock: () => number;
   readonly approve: Approve | null;
   readonly id: string;
+  readonly maskedInput: boolean;
   private readonly patterns: PatternDetector;
   private knownCache: [number, KnownDetector] | null = null;
   private restorerCache: Restorer | null = null;
@@ -114,6 +232,7 @@ export class Session {
     this.clock = o.clock ?? (() => Date.now() / 1000);
     this.approve = o.approve ?? null;
     this.id = o.sessionId ?? randomUUID().replaceAll("-", "");
+    this.maskedInput = o.maskedInput ?? false;
     this.patterns = new PatternDetector(o.extraPatterns ?? [], this.dayfirst, () => this.year());
   }
 
@@ -134,15 +253,21 @@ export class Session {
   private knownDetector(): KnownDetector {
     if (this.knownCache && this.knownCache[0] === this.vault.version) return this.knownCache[1];
     const forms: Form[] = [];
+    const stopWords = new Set(pools().name_stopwords.map((w) => w.toLowerCase()));
     for (const [t, values] of Object.entries(this.known)) {
-      for (const v of values) forms.push([t, v, CASELESS_TYPES.has(t) ? "nocase" : "case"]);
+      for (const v of values) {
+        forms.push([t, v, knownMode(t, v)]);
+        if (t === "PERSON" && splitWs(v).length > 1) {
+          // the app vouched for this person, so "Dana called" and "Reyes, Dana" are them too
+          for (const w of splitWs(v)) if (cpLength(w) >= 2 && !stopWords.has(w.toLowerCase())) forms.push(["PERSON", w, "case"]);
+        }
+      }
     }
     for (const e of this.vault.entries) {
       if (e.type === "DATE" || e.type === "MONEY") continue; // the patterns find these again, and their stand-ins depend on the format
       for (const real of new Set(e.surfaces.values())) {
-        if (DIGIT_TYPES.has(e.type)) forms.push([e.type, digitsOf(real), "digits"]);
-        else if (CASELESS_TYPES.has(e.type)) forms.push([e.type, real, "nocase"]);
-        else forms.push([e.type, real, "case"]);
+        if (DIGIT_TYPES.has(e.type) && digitsOf(real).length >= 6) forms.push([e.type, digitsOf(real), "digits"]);
+        else forms.push([e.type, real, knownMode(e.type, real)]);
       }
     }
     const stop = new Set(pools().name_stopwords.map((w) => w.toLowerCase()));
@@ -168,7 +293,11 @@ export class Session {
   detect(text: string): Span[] {
     const spans = [...this.patterns.detect(text), ...this.knownDetector().detect(text)];
     for (const d of this.extraDetectors) spans.push(...d.detect(text));
-    return resolve(spans).filter((s) => !this.allow.has(s.text.toLowerCase()) && !this.vault.isStandIn(s.text));
+    return resolve(spans).filter((s) => !this.allow.has(s.text.toLowerCase()) && !this.isOurs(s.text));
+  }
+
+  private isOurs(text: string): boolean {
+    return this.maskedInput && this.vault.isStandIn(text);
   }
 
   // Masking
@@ -187,7 +316,7 @@ export class Session {
       const current = spans;
       todo = resolve(this.knownDetector().detect(text)).filter((sp) =>
         !current.some((o) => sp.start < o.end && o.start < sp.end) && !this.allow.has(sp.text.toLowerCase()) &&
-        !this.vault.isStandIn(sp.text));
+        !this.isOurs(sp.text));
       if (todo.length === 0) {
         settled = true;
         break;
@@ -320,8 +449,13 @@ export class Session {
     let sites: string[] = [...(rule.options.sites ?? [])];
     const bound = source ? handles.boundSite(source) : null;
     if (sites.length === 0 && bound) sites = [bound];
-    const ttl = (type === "OTP" ? handles.ttlFromText(text) : null) || rule.options.ttl_s;
-    const expires = ttl ? this.now() + Math.trunc(Number(ttl)) : null;
+    // text is untrusted: a phrase like "valid for 999 hours" may only shorten the policy's limit, never extend it
+    const textTtl = type === "OTP" ? handles.ttlFromText(text) : null;
+    const policyTtl: number | null = rule.options.ttl_s ?? null;
+    const limits = [textTtl, policyTtl].filter((x): x is number => x !== null);
+    if (textTtl !== null && policyTtl === null) limits.push(MAX_TEXT_TTL);
+    const ttl = limits.length > 0 ? Math.min(...limits) : null;
+    const expires = ttl !== null && ttl !== undefined ? this.now() + Math.trunc(Number(ttl)) : null; // 0 means already expired, not never
     return {
       sites,
       tools: rule.options.tools ?? null,
@@ -423,14 +557,41 @@ export class Session {
 
   // JSON and chat messages
 
+  /**
+   * Mask a JSON value that is data (a tool result): every string, and the keys too, since a result keyed by email
+   * address is as personal as one with emails in it.
+   */
   maskJson(value: any, source?: SourceLike | null): [any, string[]] {
     const notes: string[] = [];
-    return [this.maskTree(value, source ?? null, notes, NO_KEYS), notes];
+    const src = source ?? null;
+    return [this.maskTree(this.maskKeys(value, src, notes), src, notes, NO_KEYS), notes];
   }
 
-  private maskTree(v: any, source: SourceLike | null, notes: string[], skipKeys: ReadonlySet<string>, key: string | null = null): any {
+  private maskKeys(v: any, source: SourceLike | null, notes: string[]): any {
+    if (Array.isArray(v)) return v.map((x) => this.maskKeys(x, source, notes));
+    if (v !== null && typeof v === "object") {
+      const out: Record<string, any> = {};
+      for (const [k, x] of Object.entries(v)) {
+        const m = this.mask(k, source);
+        for (const n of m.notes) if (!notes.includes(n)) notes.push(n);
+        Object.defineProperty(out, m.text, { value: this.maskKeys(x, source, notes), writable: true, enumerable: true, configurable: true });
+      }
+      return out;
+    }
+    return v;
+  }
+
+  private maskTree(v: any, source: SourceLike | null, notes: string[], skipKeys: ReadonlySet<string>, key: string | null = null,
+    parent: Record<string, any> | null = null): any {
     if (typeof v === "string") {
-      if (key !== null && skipKeys.has(key)) return v;
+      if ((key !== null && skipKeys.has(key)) || isSignedThinking(key, parent)) return v;
+      const decoded = textBase64(key, v, parent);
+      if (decoded !== null) { // text sent as base64: mask the text, send it back as base64
+        const m = this.mask(decoded[2], source);
+        for (const n of m.notes) if (!notes.includes(n)) notes.push(n);
+        return decoded[0] + Buffer.from(m.text, "utf-8").toString("base64");
+      }
+      if (isBinary(key, v, parent)) return v;
       if (key === "arguments" && /^[{[]/.test(stripWs(v))) {
         let inner: unknown;
         let ok = true;
@@ -445,9 +606,13 @@ export class Session {
       for (const n of m.notes) if (!notes.includes(n)) notes.push(n);
       return m.text;
     }
-    if (Array.isArray(v)) return v.map((x) => this.maskTree(x, source, notes, skipKeys, key));
+    if (Array.isArray(v)) return v.map((x) => this.maskTree(x, source, notes, skipKeys, key, parent));
     if (v !== null && typeof v === "object") {
-      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, this.maskTree(x, source, notes, skipKeys, k)]));
+      const out: Record<string, any> = {};
+      for (const [k, x] of Object.entries(v)) {
+        Object.defineProperty(out, k, { value: this.maskTree(x, source, notes, skipKeys, k, v), writable: true, enumerable: true, configurable: true });
+      }
+      return out;
     }
     return v;
   }
@@ -575,12 +740,29 @@ export class Session {
 
   // Egress
 
+  /**
+   * Two checks on the exact bytes about to leave: every real value the vault knows, and a fresh detection pass over
+   * the content fields, so a field that was never masked (a document, a metadata note) is caught too.
+   */
   checkEgress(payload: Uint8Array | string): Leak[] {
-    return egressCheck(this.vault, payload, this.restorer());
+    const leaks = egressCheck(this.vault, payload, this.restorer());
+    const seen = new Set(leaks.map((lk) => JSON.stringify([lk.type, lk.entryId])));
+    for (const span of this.detect(contentText(payload))) {
+      if (this.policy.ruleFor(span.type).action !== "keep" && !this.vault.isStandIn(span.text)) {
+        const key = JSON.stringify([span.type, "detected"]);
+        if (!seen.has(key)) {
+          seen.add(key);
+          leaks.push({ type: span.type, entryId: "detected" });
+        }
+      }
+    }
+    return leaks;
   }
 
   /** Check the exact bytes about to be sent and sign a receipt. Throws EgressLeak instead of sending a leak. */
   recordEgress(log: EgressLog, payload: Uint8Array | string, dest: string): string {
+    const leaks = this.checkEgress(payload);
+    if (leaks.length > 0) throw new EgressLeak(leaks);
     return log.record(this.vault, payload, {
       session: this.id, policyDigest: this.policy.digest, dest, now: this.now(), detectors: this.detectorNames(),
       restorer: this.restorer(),

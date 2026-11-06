@@ -36,16 +36,20 @@
    "action": "keep"
   },
   "CARD": {
-   "action": "handle"
+   "action": "handle",
+   "ask": true
   },
   "IBAN": {
-   "action": "handle"
+   "action": "handle",
+   "ask": true
   },
   "ROUTING": {
-   "action": "handle"
+   "action": "handle",
+   "ask": true
   },
   "BANK_ACCOUNT": {
-   "action": "handle"
+   "action": "handle",
+   "ask": true
   },
   "SSN": {
    "action": "handle",

@@ -15,6 +15,7 @@ The vault for each session lives in this process (and optionally on disk, encryp
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -34,7 +35,7 @@ from ..egress import EgressLeak, EgressLog
 from ..handles import HANDLE, HandleRefused, Sink, Source
 from ..jws import Signer
 from ..policy import Policy, load_profile
-from ..session import RefusedData, Session
+from ..session import SKIP_KEYS, TOP_KEYS, RefusedData, Session
 from ..vault import Vault
 from .sse import Event, Parser
 
@@ -99,8 +100,7 @@ class Proxy:
     def _vault_path(self, sid: str) -> Path | None:
         if not self.config.vault_dir or not self.config.vault_key:
             return None
-        safe = "".join(c for c in sid if c.isalnum() or c in "-_")[:80] or "default"
-        return Path(self.config.vault_dir) / f"{safe}.vault"
+        return Path(self.config.vault_dir) / f"{_file_id(sid)}.vault"
 
     def save(self, s: Session) -> None:
         path = self._vault_path(s.id)
@@ -112,8 +112,7 @@ class Proxy:
         if not self.config.log_dir:
             return None
         if sid not in self.logs:
-            safe = "".join(c for c in sid if c.isalnum() or c in "-_")[:80] or "default"
-            self.logs[sid] = EgressLog(Path(self.config.log_dir) / safe, self.signer, self.config.store_payloads)
+            self.logs[sid] = EgressLog(Path(self.config.log_dir) / _file_id(sid), self.signer, self.config.store_payloads)
         return self.logs[sid]
 
     # Request bodies
@@ -125,24 +124,36 @@ class Proxy:
         return Source(sender=sender, site=site) if sender or site else None
 
     @staticmethod
-    def mask_body(s: Session, kind: str, body: dict, source: Source | None) -> dict:
-        body = dict(body)
-        if kind == "chat" and isinstance(body.get("messages"), list):
-            body["messages"], _ = s.mask_messages(body["messages"], source)
-        elif kind == "anthropic":
-            if isinstance(body.get("messages"), list):
-                body["messages"], _ = s.mask_messages(body["messages"], source)
-            if "system" in body:
-                body["system"], _ = s.mask_value(body["system"], source)
-        elif kind == "responses":
-            if isinstance(body.get("input"), str):
-                m = s.mask(body["input"], source)
-                body["input"] = m.text + ("\n\n" + "\n".join("Note: " + n for n in m.notes) if m.notes else "")
-            elif isinstance(body.get("input"), list):
-                body["input"], _ = s.mask_messages(body["input"], source)
-            if isinstance(body.get("instructions"), str):
-                body["instructions"] = s.mask(body["instructions"], source).text
-        return body
+    def mask_body(s: Session, body: dict, source: Source | None) -> dict:
+        """Mask the whole request body. Chat histories go through mask_messages so handle notes land in the message
+        that mentions them; every other field (system prompts, documents, names, metadata, tool descriptions) is
+        masked too, leaving only structural keys and base64 blobs alone.
+
+        Two passes: a name learned late in the body (in a message) may also appear earlier (in the system prompt)
+        without any cue, so the second pass, with everything learned, catches it. Stand-ins do not change between
+        passes because they come from the vault."""
+        out = body
+        for _ in range(2):
+            out = Proxy._mask_once(s, body, source)
+        return out
+
+    @staticmethod
+    def _mask_once(s: Session, body: dict, source: Source | None) -> dict:
+        out = {}
+        for key, value in body.items():
+            if key in SKIP_KEYS or key in TOP_KEYS:
+                out[key] = value  # structure such as the model name; the egress check still reads it
+            elif key in ("messages", "input") and isinstance(value, list):
+                out[key], _ = s.mask_messages(value, source)
+            elif key == "input" and isinstance(value, str):
+                m = s.mask(value, source)
+                out[key] = m.text + ("\n\n" + "\n".join("Note: " + n for n in m.notes) if m.notes else "")
+            elif key in ("system", "instructions") and isinstance(value, str):
+                m = s.mask(value, source)
+                out[key] = m.text + ("\n\n" + "\n".join("Note: " + n for n in m.notes) if m.notes else "")
+            else:
+                out[key], _ = s.mask_value(value, source)
+        return out
 
     # Restoring
 
@@ -366,8 +377,10 @@ class Proxy:
     async def handle(self, request: Request, kind: str) -> Response:
         try:
             body = await request.json()
-        except ValueError:
+        except (ValueError, RecursionError):
             return JSONResponse({"error": {"type": "opn_bad_request", "message": "body must be JSON"}}, 400)
+        if not isinstance(body, dict):
+            return JSONResponse({"error": {"type": "opn_bad_request", "message": "body must be a JSON object"}}, 400)
         try:
             policy = self.policy_for(request)
         except PermissionError as exc:
@@ -375,15 +388,23 @@ class Proxy:
         sid = request.headers.get("x-opn-session") or uuid.uuid4().hex
         s = self.session_for(sid, policy)
         try:
-            masked = self.mask_body(s, kind, body, self.source_for(request))
+            masked = self.mask_body(s, body, self.source_for(request))
+            payload = json.dumps(masked, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         except RefusedData as exc:
             return JSONResponse({"error": {"type": "opn_refused", "message": str(exc)}}, 422)
-        payload = json.dumps(masked, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except (UnicodeError, RecursionError):  # lone surrogates, absurd nesting: refuse, never crash
+            return JSONResponse({"error": {"type": "opn_bad_request", "message": "body cannot be processed"}}, 400)
         upstream_base = self.config.anthropic_upstream if kind == "anthropic" else self.config.openai_upstream
         url = upstream_base.rstrip("/") + request.url.path
         receipt = None
         log = self.log_for(sid)
         try:
+            if request.url.query:
+                # the query string goes upstream too, so it gets the same check first (headers are not checked:
+                # they carry credentials and API versions, and the app sets them, not the model)
+                query_leaks = s.check_egress(json.dumps(dict(request.query_params)))
+                if query_leaks:
+                    raise EgressLeak(query_leaks)
             if log is not None:
                 receipt = s.record_egress(log, payload, httpx.URL(url).host)
             else:
@@ -456,6 +477,11 @@ def create_app(config: ProxyConfig | None = None) -> Starlette:
     ])
     app.state.proxy = proxy
     return app
+
+
+def _file_id(sid: str) -> str:
+    """A file-safe name for a session id that cannot collide (a.b and ab stay apart)."""
+    return hashlib.sha256(sid.encode("utf-8")).hexdigest()[:32]
 
 
 def default_key_dir() -> Path:

@@ -40,6 +40,12 @@ class PolicyError(ValueError):
     pass
 
 
+def _is_suffix(host: str) -> bool:
+    from .fakes import is_public_suffix
+
+    return is_public_suffix(host)
+
+
 @dataclass(frozen=True)
 class Rule:
     action: str
@@ -64,10 +70,60 @@ class Rule:
         if action == "fpe" and type_ not in DIGIT_TYPES and type_ != "*":
             raise PolicyError(f"{type_}: format-preserving encryption is for digit types only")
         options = {k: v for k, v in doc.items() if k != "action"}
+        for site in options.get("sites") or []:
+            # *.com or *.github.io would let anyone's site match; a wildcard needs a real domain under it
+            if isinstance(site, str) and site.startswith("*.") and ("." not in site[2:] or _is_suffix(site[2:])):
+                raise PolicyError(f"{type_}: {site!r} covers a whole public suffix")
         unknown = set(options) - _OPTIONS.get(action, set())
         if unknown:
             raise PolicyError(f"{type_}: option(s) {sorted(unknown)} do not apply to {action!r}")
         return cls(action, options)
+
+
+def _min_opt(a, b):
+    """The smaller of two optional limits; None means no limit."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
+def _narrow(a, b):
+    """Two optional allow-lists combined so the result allows only what both allow. None when neither is set,
+    an empty list when they have nothing in common."""
+    if not a:
+        return list(b) if b else None
+    if not b:
+        return list(a)
+    return [x for x in a if x in b]
+
+
+def stricter(a: Rule, b: Rule) -> Rule:
+    """The stricter of two rules. When both are the same action, their limits combine, so tightening can never
+    drop a handle's `uses`, `ttl_s`, `ask`, `sites` or `tools`. Ties between different actions keep `a`."""
+    if a.strength != b.strength:
+        return a if a.strength > b.strength else b
+    if a.action != b.action or a.action != "handle":
+        return a
+    opts = {}
+    uses = _min_opt(a.options.get("uses"), b.options.get("uses"))
+    ttl = _min_opt(a.options.get("ttl_s"), b.options.get("ttl_s"))
+    sites = _narrow(a.options.get("sites"), b.options.get("sites"))
+    tools = _narrow(a.options.get("tools"), b.options.get("tools"))
+    if sites == [] or tools == []:
+        return Rule("drop")  # the two sides allow no common place, so nothing may ever be filled
+    if uses is not None:
+        opts["uses"] = uses
+    if ttl is not None:
+        opts["ttl_s"] = ttl
+    if a.options.get("ask") or b.options.get("ask"):
+        opts["ask"] = True
+    if sites is not None:
+        opts["sites"] = sites
+    if tools is not None:
+        opts["tools"] = tools
+    return Rule("handle", opts)
 
 
 @dataclass(frozen=True)
@@ -116,9 +172,8 @@ class Policy:
         types = set(self.rules) | set(other.rules)
         rules = {}
         for t in types:
-            mine, theirs = self.rule_for(t), other.rule_for(t)
-            rules[t] = theirs if theirs.strength > mine.strength else mine
-        default = other.default if other.default.strength > self.default.strength else self.default
+            rules[t] = stricter(self.rule_for(t), other.rule_for(t))
+        default = stricter(self.default, other.default)
         allow = tuple(v for v in self.allow if v in other.allow)  # only values both policies allow stay visible
         return Policy(f"{self.id}+{other.id}", rules, default, self.description, allow)
 
@@ -130,8 +185,25 @@ class Policy:
             old = self.rule_for(type_)
             if new.strength < old.strength:
                 raise PolicyError(f"{type_}: {old.action!r} cannot be loosened to {new.action!r}")
-            rules[type_] = new
+            rules[type_] = stricter(new, old)  # same action: the old limits still apply
         return Policy(self.id, rules, self.default, self.description, self.allow)
+
+
+# A simple switch for products: how much the person wants hidden. Secrets (codes, passwords, cards, bank numbers,
+# SSNs, keys) are hidden at every level, as handles the model can still use, so nothing breaks for the task.
+LEVELS = {
+    1: ("secrets_only", "Secrets", "Codes, passwords, cards, bank numbers and keys are hidden. Everything else is visible."),
+    2: ("contacts", "Contacts", "Secrets, plus emails, phone numbers, street addresses and IPs. Names stay visible."),
+    3: ("strict", "Everything", "Secrets, contacts, names, companies and places are replaced; dates shift together."),
+}
+
+
+def load_level(level: int) -> Policy:
+    """The policy behind a privacy level (1, 2 or 3). A product can show LEVELS[n][1] and [2] as the label and
+    the one-line explanation, and let the person choose."""
+    if level not in LEVELS:
+        raise PolicyError(f"levels are 1, 2 and 3, got {level!r}")
+    return load_profile(LEVELS[level][0])
 
 
 def load_profile(name: str) -> Policy:

@@ -46,23 +46,28 @@ def payload_text(payload: bytes | str) -> str:
     raw = payload.decode("utf-8", errors="replace") if isinstance(payload, bytes) else payload
     try:
         doc = json.loads(raw)
-    except ValueError:
+    except (ValueError, RecursionError):
         return raw
     out: list[str] = [raw]
-
-    def walk(v):
+    stack = [doc]
+    while stack:  # a loop, not recursion, so deeply nested JSON cannot crash the check
+        v = stack.pop()
         if isinstance(v, str):
             out.append(v)
         elif isinstance(v, dict):
             for k, x in v.items():
                 out.append(str(k))
-                walk(x)
+                stack.append(x)
         elif isinstance(v, list):
-            for x in v:
-                walk(x)
-
-    walk(doc)
+            stack.extend(v)
     return "\n".join(out)
+
+
+def known_mode(type_: str, value: str) -> str:
+    """Matches session.known_mode: multi-word names in any case, single words as written."""
+    if type_ in CASELESS_TYPES or (type_ in ("PERSON", "ORG", "LOCATION", "ADDRESS") and len(value.split()) > 1):
+        return "nocase"
+    return "case"
 
 
 def real_forms(vault: Vault) -> list[tuple[str, str, str]]:
@@ -79,10 +84,8 @@ def real_forms(vault: Vault) -> list[tuple[str, str, str]]:
                 d = digits_of(real)
                 # long numbers match with any formatting; a short code must match as written
                 forms.append((e.type, d, "digits") if len(d) >= 6 else (e.type, real, "case"))
-            elif e.type in CASELESS_TYPES:
-                forms.append((e.type, real, "nocase"))
             elif len(real) >= 2:
-                forms.append((e.type, real, "case"))
+                forms.append((e.type, real, known_mode(e.type, real)))
     stop = {w.lower() for w in pools()["name_stopwords"]}
     for real_part in vault.parts_back.values():
         # stopword parts ("May") are never masked on their own, so searching for them would only raise false alarms
@@ -190,14 +193,26 @@ class EgressLog:
         return token
 
 
-def verify_log(folder, public_key, vault: Vault | None = None) -> dict:
+def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: int | None = None,
+               expect_last: str | None = None, expect_session: str | None = None) -> dict:
     """Check every receipt: signature, chain, payload digest and (with the vault) the egress check again.
 
-    Returns a report with counts and a list of problems; an empty problem list means the log holds up.
+    A chain proves that nothing in the middle was changed, but not that nothing was cut off the end. To catch that,
+    pass what you recorded elsewhere: the number of requests sent (`expect_count`) or the digest of the last
+    receipt (`expect_last`, from the x-opn-receipt header the app kept). Returns counts and a list of problems; an
+    empty list means the log holds up.
     """
     folder = Path(folder)
-    lines = [ln for ln in (folder / "receipts.jsonl").read_text().splitlines() if ln.strip()]
     problems: list[str] = []
+    log_file = folder / "receipts.jsonl"
+    lines = [ln for ln in log_file.read_text(errors="replace").splitlines() if ln.strip()] if log_file.exists() else []
+    if not log_file.exists():
+        problems.append("there is no receipts.jsonl in this folder")
+    stored = (folder / "payloads").is_dir()
+    extra = sorted(p.name for p in (folder / "payloads").glob("*.bin")
+                   if not p.stem.isdigit() or int(p.stem) > len(lines)) if stored else []
+    if extra:
+        problems.append(f"{len(extra)} stored payload(s) have no receipt: receipts were removed")
     prev = None
     leaks_total = 0
     rechecked = 0
@@ -207,8 +222,14 @@ def verify_log(folder, public_key, vault: Vault | None = None) -> dict:
             body = verify(token, public_key, RECEIPT_TYP)
         except SignatureError as exc:
             problems.append(f"receipt {i}: {exc}")
-            prev = digest(token.encode("ascii"))
+            prev = _safe_digest(token)
             continue
+        except Exception as exc:  # a damaged line must never stop the rest of the check
+            problems.append(f"receipt {i}: unreadable ({type(exc).__name__})")
+            prev = _safe_digest(token)
+            continue
+        if expect_session is not None and body.get("session") != expect_session:
+            problems.append(f"receipt {i}: belongs to another session")
         if body.get("seq") != i:
             problems.append(f"receipt {i}: sequence number is {body.get('seq')}")
         if body.get("prev") != prev:
@@ -226,10 +247,20 @@ def verify_log(folder, public_key, vault: Vault | None = None) -> dict:
                 leaks_total += len(found)
                 if found:
                     problems.append(f"receipt {i}: {len(found)} known value(s) found on re-check")
-        prev = digest(token.encode("ascii"))
-    return {"receipts": len(lines), "rechecked": rechecked, "leaks": leaks_total, "problems": problems}
+        elif stored:
+            problems.append(f"receipt {i}: its stored payload is missing")
+        prev = _safe_digest(token)
+    if not lines and log_file.exists():
+        problems.append("the log holds no receipts")
+    if vault is not None and lines and rechecked == 0:
+        problems.append("no stored payloads to re-check: they were never kept, or they were removed")
+    if expect_count is not None and expect_count != len(lines):
+        problems.append(f"expected {expect_count} receipt(s), found {len(lines)}: the log was cut or added to")
+    if expect_last is not None and expect_last != prev:
+        problems.append("the last receipt is not the one you recorded: the log was cut or replaced")
+    return {"receipts": len(lines), "rechecked": rechecked, "leaks": leaks_total, "problems": problems,
+            "last": prev}
 
 
-def receipt_digest(token: str) -> str:
-    return digest(token.encode("ascii"))
-
+def _safe_digest(token: str) -> str:
+    return digest(token.encode("utf-8", errors="replace"))

@@ -6,7 +6,7 @@
   opn restore masked.txt                        put real values back (needs the same vault and key)
   opn verify LOGDIR                             check a folder of receipts: signatures, chain, digests, leaks
   opn proxy --profile draft_reply               run the local proxy on 127.0.0.1:8787
-  opn mcp-gateway --profile browse_and_fill -- <command that starts an MCP server>
+  opn mcp-gateway --profile browse_and_fill --source-site acme.com --tool-site type=https://acme.com -- <command>
   opn demo                                      see what the model would see for a sample email
   opn conformance vectors/                      run the shared test vectors
 
@@ -16,7 +16,6 @@ Keys live in ~/.config/open-pseudonym unless you say otherwise. They are never p
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
@@ -24,7 +23,7 @@ from pathlib import Path
 from . import __version__
 from .handles import Source
 from .jws import Signer, public_key_from_pem, public_pem
-from .policy import load_profile, profile_names
+from .policy import LEVELS, load_profile, profile_names
 from .session import Session
 from .vault import Vault
 
@@ -128,8 +127,9 @@ def cmd_verify(args) -> int:
     pub_path = Path(args.pub) if args.pub else key_dir(args) / "signing.pub.pem"
     pub = public_key_from_pem(pub_path.read_bytes())
     vault = Vault.load(args.vault, load_vault_key(args)) if args.vault else None
-    report = verify_log(args.logdir, pub, vault)
-    print(f"receipts: {report['receipts']}")
+    report = verify_log(args.logdir, pub, vault, expect_count=args.expect_count, expect_last=args.expect_last,
+                        expect_session=args.expect_session)
+    print(f"receipts: {report['receipts']} (last: {report['last']})")
     if vault is not None:
         print(f"payloads re-checked against the vault: {report['rechecked']}, known values found: {report['leaks']}")
     if report["problems"]:
@@ -137,7 +137,9 @@ def cmd_verify(args) -> int:
         for p in report["problems"]:
             print("  " + p)
         return 1
-    print("every receipt is signed, chained and matches its payload")
+    print("every receipt is signed and chained, and every stored payload matches its digest")
+    if args.expect_count is None and args.expect_last is None:
+        print("note: without --expect-count or --expect-last a log cut short at the end cannot be told apart")
     return 0
 
 
@@ -154,8 +156,13 @@ def cmd_proxy(args) -> int:
         anthropic_upstream=args.anthropic_upstream, log_dir=args.log_dir, signer=load_signer(args),
         vault_dir=args.vault_dir, vault_key=load_vault_key(args) if args.vault_dir else None, fill_tools=fill,
     )
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("warning: the proxy has no login; anyone who can reach it and guess a session id can read that "
+              "session's restores. Keep it on 127.0.0.1 unless something in front of it checks who is calling.",
+              file=sys.stderr)
     print(f"open-pseudonym proxy on http://{args.host}:{args.port} (profile {args.profile}); "
-          f"receipts in {args.log_dir or 'memory only'}", file=sys.stderr)
+          + (f"receipts in {args.log_dir}" if args.log_dir else "no receipts (add --log-dir to keep them)"),
+          file=sys.stderr)
     uvicorn.run(create_app(cfg), host=args.host, port=args.port, log_level="warning")
     return 0
 
@@ -177,8 +184,11 @@ def cmd_mcp_gateway(args) -> int:
         vault = Vault.load(args.vault, key) if Path(args.vault).exists() else Vault()
     s = Session(args.profile, vault)
     params = StdioServerParameters(command=args.command[0], args=args.command[1:])
+    tool_sites = dict(item.split("=", 1) for item in args.tool_site)
+    source = Source(site=args.source_site) if args.source_site else None
     try:
-        anyio.run(lambda: run_gateway(params, s, site=args.site))
+        anyio.run(lambda: run_gateway(params, s, tool_sites=tool_sites,
+                                      source_for=(lambda tool, result: source) if source else None))
     finally:
         if args.vault:
             s.vault.save(args.vault, load_vault_key(args))
@@ -201,8 +211,12 @@ def cmd_demo(args) -> int:
 
 
 def cmd_profiles(args) -> int:
+    print("Levels (a simple switch for people):")
+    for n, (name, label, text) in LEVELS.items():
+        print(f"  {n}  {label:10} ({name}): {text}")
+    print("\nTask profiles:")
     for name in profile_names():
-        print(f"{name:16} {load_profile(name).description}")
+        print(f"  {name:16} {load_profile(name).description}")
     return 0
 
 
@@ -243,6 +257,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--pub", help="public key PEM (default: signing.pub.pem in the key folder)")
     v.add_argument("--vault", help="also re-run the egress check on stored payloads with this vault")
     v.add_argument("--key-file")
+    v.add_argument("--expect-count", type=int, help="the number of requests you know were sent")
+    v.add_argument("--expect-last", help="the digest of the last receipt you kept (sha-256:...)")
+    v.add_argument("--expect-session", help="the session id every receipt must belong to")
     v.set_defaults(fn=cmd_verify)
 
     x = sub.add_parser("proxy", help="run the local proxy")
@@ -261,7 +278,9 @@ def main(argv: list[str] | None = None) -> int:
 
     g = sub.add_parser("mcp-gateway", help="put an MCP server behind Open Pseudonym (stdio)")
     g.add_argument("--profile", default="strict")
-    g.add_argument("--site", help="the site the upstream server acts on, for handle binding")
+    g.add_argument("--source-site", help="secrets read through this server belong to this site (binds handles)")
+    g.add_argument("--tool-site", action="append", default=[], metavar="TOOL=SITE",
+                   help="this tool acts on SITE, so handles bound to SITE may be filled into it")
     g.add_argument("--vault", help="keep the vault in this file between runs")
     g.add_argument("--key-file")
     g.add_argument("command", nargs=argparse.REMAINDER)

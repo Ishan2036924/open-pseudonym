@@ -13,7 +13,7 @@ export { FF1 } from "./fpe.ts";
 export { HandleRefused, Sink, Source, type SinkLike, type SourceLike } from "./handles.ts";
 export { canonical, digest } from "./jcs.ts";
 export { Signer, SignatureError, publicKeyFromPem, publicPem, verify } from "./jws.ts";
-export { Policy, PolicyError, Rule, loadProfile, profileNames, suggestProfile } from "./policy.ts";
+export { LEVELS, Policy, PolicyError, Rule, loadLevel, loadProfile, profileNames, suggestProfile } from "./policy.ts";
 export {
   RefusedData, Session, type Approve, type Masked, type Replacement, type Resolved, type SessionOptions,
 } from "./session.ts";

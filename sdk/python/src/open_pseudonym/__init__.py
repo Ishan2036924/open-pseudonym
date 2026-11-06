@@ -11,14 +11,14 @@ The short version:
 from .egress import EgressLeak, EgressLog, Leak, verify_log
 from .handles import HandleRefused, Sink, Source
 from .jws import Signer
-from .policy import Policy, PolicyError, Rule, load_profile, profile_names, suggest_profile
+from .policy import LEVELS, Policy, PolicyError, Rule, load_level, load_profile, profile_names, suggest_profile
 from .session import Masked, RefusedData, Replacement, Resolved, Session
 from .vault import Vault, VaultError
 
 __version__ = "0.1.0"
 
 __all__ = [
-    "EgressLeak", "EgressLog", "HandleRefused", "Leak", "Masked", "Policy", "PolicyError", "RefusedData",
+    "LEVELS", "EgressLeak", "EgressLog", "HandleRefused", "Leak", "Masked", "Policy", "PolicyError", "RefusedData",
     "Replacement", "Resolved", "Rule", "Session", "Signer", "Sink", "Source", "Vault", "VaultError",
-    "load_profile", "profile_names", "suggest_profile", "verify_log", "__version__",
+    "load_level", "load_profile", "profile_names", "suggest_profile", "verify_log", "__version__",
 ]

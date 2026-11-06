@@ -18,7 +18,7 @@ import { SignatureError, type Signer, verify } from "./jws.ts";
 import { Restorer } from "./restore.ts";
 import { CASELESS_TYPES, DIGIT_TYPES, digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
-import { splitWs } from "./util.ts";
+import { splitWs, stripWs } from "./util.ts";
 
 export const RECEIPT_TYP = "opn-egress+jws";
 
@@ -63,6 +63,14 @@ export function payloadText(payload: Uint8Array | string): string {
   return out.join("\n");
 }
 
+/** Matches the session's rule: multi-word names in any case, single words as written. */
+export function knownMode(type: string, value: string): "case" | "nocase" {
+  if (CASELESS_TYPES.has(type) || (["PERSON", "ORG", "LOCATION", "ADDRESS"].includes(type) && splitWs(value).length > 1)) {
+    return "nocase";
+  }
+  return "case";
+}
+
 /** Every real value that must never leave, as (type, text, mode) for KnownDetector. */
 export function realForms(vault: Vault): Form[] {
   const forms: Form[] = [];
@@ -76,10 +84,8 @@ export function realForms(vault: Vault): Form[] {
         const d = digitsOf(real);
         // long numbers match with any formatting; a short code must match as written
         forms.push(d.length >= 6 ? [e.type, d, "digits"] : [e.type, real, "case"]);
-      } else if (CASELESS_TYPES.has(e.type)) {
-        forms.push([e.type, real, "nocase"]);
       } else if ([...real].length >= 2) {
-        forms.push([e.type, real, "case"]);
+        forms.push([e.type, real, knownMode(e.type, real)]);
       }
     }
   }
@@ -147,8 +153,11 @@ export interface RecordOptions {
   allowLeaks?: boolean;
 }
 
+// the line breaks Python's str.splitlines() honours
+const LINE_BREAKS = /\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/u;
+
 function readLines(file: string): string[] {
-  return fs.readFileSync(file, "utf-8").split("\n").map((ln) => ln.replace(/\r$/, "")).filter((ln) => ln.trim() !== "");
+  return fs.readFileSync(file, "utf-8").split(LINE_BREAKS).filter((ln) => stripWs(ln) !== "");
 }
 
 /**
@@ -224,16 +233,39 @@ export interface LogReport {
   rechecked: number;
   leaks: number;
   problems: string[];
+  /** The digest of the last receipt, to record elsewhere and pass back as `expectLast` later. */
+  last: string | null;
+}
+
+export interface VerifyOptions {
+  /** How many requests were sent, as recorded elsewhere. */
+  expectCount?: number | null;
+  /** The digest of the last receipt (the x-opn-receipt header the app kept). */
+  expectLast?: string | null;
+  /** The session id the receipts must belong to, so a log from another session is not taken for this one. */
+  expectSession?: string | null;
 }
 
 /**
  * Check every receipt: signature, chain, payload digest and (with the vault) the egress check again.
  *
- * Returns a report with counts and a list of problems; an empty problem list means the log holds up.
+ * A chain proves that nothing in the middle was changed, but not that nothing was cut off the end. To catch that,
+ * pass what you recorded elsewhere: the number of requests sent (`expectCount`) or the digest of the last receipt
+ * (`expectLast`, from the x-opn-receipt header the app kept). Returns counts and a list of problems; an empty list
+ * means the log holds up.
  */
-export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | null): LogReport {
-  const lines = readLines(path.join(folder, "receipts.jsonl"));
+export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | null, o: VerifyOptions = {}): LogReport {
+  const logFile = path.join(folder, "receipts.jsonl");
+  const haveLog = fs.existsSync(logFile);
+  const lines = haveLog ? readLines(logFile) : [];
   const problems: string[] = [];
+  if (!haveLog) problems.push("there is no receipts.jsonl in this folder");
+  const payloadDir = path.join(folder, "payloads");
+  const stored = fs.existsSync(payloadDir) && fs.statSync(payloadDir).isDirectory();
+  const extra = stored
+    ? fs.readdirSync(payloadDir).filter((n) => n.endsWith(".bin") && !(/^[0-9]+$/.test(n.slice(0, -4)) && Number(n.slice(0, -4)) <= lines.length))
+    : [];
+  if (extra.length > 0) problems.push(`${extra.length} stored payload(s) have no receipt: receipts were removed`);
   let prev: string | null = null;
   let leaksTotal = 0;
   let rechecked = 0;
@@ -244,11 +276,13 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
     try {
       body = verify(token, publicKey, RECEIPT_TYP);
     } catch (exc) {
-      if (!(exc instanceof SignatureError)) throw exc;
-      problems.push(`receipt ${i}: ${exc.message}`);
-      prev = digest(Buffer.from(token, "ascii"));
+      // a damaged line must never stop the rest of the check
+      if (exc instanceof SignatureError) problems.push(`receipt ${i}: ${exc.message}`);
+      else problems.push(`receipt ${i}: unreadable (${exc instanceof Error ? exc.name : "Error"})`);
+      prev = safeDigest(token);
       continue;
     }
+    if (o.expectSession != null && body.session !== o.expectSession) problems.push(`receipt ${i}: belongs to another session`);
     if (body.seq !== i) problems.push(`receipt ${i}: sequence number is ${body.seq}`);
     if ((body.prev ?? null) !== prev) problems.push(`receipt ${i}: chain broken (prev does not match receipt ${i - 1})`);
     if (body.check?.found) problems.push(`receipt ${i}: was sent with ${body.check.found} known value(s) present`);
@@ -263,12 +297,24 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
         leaksTotal += found.length;
         if (found.length > 0) problems.push(`receipt ${i}: ${found.length} known value(s) found on re-check`);
       }
+    } else if (stored) {
+      problems.push(`receipt ${i}: its stored payload is missing`);
     }
-    prev = digest(Buffer.from(token, "ascii"));
+    prev = safeDigest(token);
   }
-  return { receipts: lines.length, rechecked, leaks: leaksTotal, problems };
+  if (lines.length === 0 && haveLog) problems.push("the log holds no receipts");
+  if (vault && lines.length > 0 && rechecked === 0) {
+    problems.push("no stored payloads to re-check: they were never kept, or they were removed");
+  }
+  if (o.expectCount != null && o.expectCount !== lines.length) {
+    problems.push(`expected ${o.expectCount} receipt(s), found ${lines.length}: the log was cut or added to`);
+  }
+  if (o.expectLast != null && o.expectLast !== prev) {
+    problems.push("the last receipt is not the one you recorded: the log was cut or replaced");
+  }
+  return { receipts: lines.length, rechecked, leaks: leaksTotal, problems, last: prev };
 }
 
-export function receiptDigest(token: string): string {
-  return digest(Buffer.from(token, "ascii"));
+function safeDigest(token: string): string {
+  return digest(Buffer.from(token, "utf-8"));
 }

@@ -6,6 +6,7 @@
 
 import * as data from "./data.ts";
 import { canonical, digest } from "./jcs.ts";
+import { isPublicSuffix } from "./fakes.ts";
 import { checkTypeName, DIGIT_TYPES } from "./types.ts";
 import { cmpCodePoints, isPlainObject, pyRepr, truthy } from "./util.ts";
 
@@ -64,11 +65,56 @@ export class Rule {
     }
     const options: Record<string, any> = {};
     for (const [k, v] of Object.entries(doc)) if (k !== "action") options[k] = v;
+    const sites = truthy(options.sites) ? (Array.isArray(options.sites) ? options.sites : isPlainObject(options.sites) ? Object.keys(options.sites) : []) : [];
+    for (const site of sites) {
+      // *.com or *.github.io would let anyone's site match; a wildcard needs a real domain under it
+      if (typeof site === "string" && site.startsWith("*.") && (!site.slice(2).includes(".") || isPublicSuffix(site.slice(2)))) {
+        throw new PolicyError(`${type}: ${pyRepr(site)} covers a whole public suffix`);
+      }
+    }
     const allowed = OPTIONS.get(action) ?? new Set<string>();
     const unknown = Object.keys(options).filter((k) => !allowed.has(k)).sort(cmpCodePoints);
     if (unknown.length > 0) throw new PolicyError(`${type}: option(s) ${pyRepr(unknown)} do not apply to ${pyRepr(action)}`);
     return new Rule(action, options);
   }
+}
+
+/** The smaller of two optional limits; null or undefined means no limit. */
+function minOpt(a: number | null | undefined, b: number | null | undefined): number | null | undefined {
+  if (a == null) return b;
+  if (b == null) return a;
+  return Math.min(a, b);
+}
+
+/** Two optional allow-lists combined so the result allows only what both allow. Null when neither is set, an empty
+ * list when they have nothing in common. */
+function narrow(a: string[] | null | undefined, b: string[] | null | undefined): string[] | null {
+  if (!truthy(a)) return truthy(b) ? [...b!] : null;
+  if (!truthy(b)) return [...a!];
+  return a!.filter((x) => b!.includes(x));
+}
+
+/**
+ * The stricter of two rules. When both are the same action, their limits combine, so tightening can never drop a
+ * handle's `uses`, `ttl_s`, `ask`, `sites` or `tools`. Ties between different actions keep `a`.
+ */
+export function stricter(a: Rule, b: Rule): Rule {
+  if (a.strength !== b.strength) return a.strength > b.strength ? a : b;
+  if (a.action !== b.action || a.action !== "handle") return a;
+  const opts: Record<string, any> = {};
+  const uses = minOpt(a.options.uses, b.options.uses);
+  const ttl = minOpt(a.options.ttl_s, b.options.ttl_s);
+  const sites = narrow(a.options.sites, b.options.sites);
+  const tools = narrow(a.options.tools, b.options.tools);
+  if ((sites !== null && sites.length === 0) || (tools !== null && tools.length === 0)) {
+    return new Rule("drop"); // the two sides allow no common place, so nothing may ever be filled
+  }
+  if (uses != null) opts.uses = uses;
+  if (ttl != null) opts.ttl_s = ttl;
+  if (truthy(a.options.ask) || truthy(b.options.ask)) opts.ask = true;
+  if (sites !== null) opts.sites = sites;
+  if (tools !== null) opts.tools = tools;
+  return new Rule("handle", opts);
 }
 
 export class Policy {
@@ -127,12 +173,8 @@ export class Policy {
   tighten(other: Policy): Policy {
     const types = new Set([...this.rules.keys(), ...other.rules.keys()]);
     const rules = new Map<string, Rule>();
-    for (const t of types) {
-      const mine = this.ruleFor(t);
-      const theirs = other.ruleFor(t);
-      rules.set(t, theirs.strength > mine.strength ? theirs : mine);
-    }
-    const defaultRule = other.default.strength > this.default.strength ? other.default : this.default;
+    for (const t of types) rules.set(t, stricter(this.ruleFor(t), other.ruleFor(t)));
+    const defaultRule = stricter(this.default, other.default);
     const allow = this.allow.filter((v) => other.allow.includes(v)); // only values both policies allow stay visible
     return new Policy(`${this.id}+${other.id}`, rules, defaultRule, this.description, allow);
   }
@@ -147,10 +189,27 @@ export class Policy {
       if (next.strength < old.strength) {
         throw new PolicyError(`${type}: ${pyRepr(old.action)} cannot be loosened to ${pyRepr(next.action)}`);
       }
-      rules.set(type, next);
+      rules.set(type, stricter(next, old)); // same action: the old limits still apply
     }
     return new Policy(this.id, rules, this.default, this.description, this.allow);
   }
+}
+
+/**
+ * A simple switch for products: how much the person wants hidden. Secrets (codes, passwords, cards, bank numbers,
+ * SSNs, keys) are hidden at every level, as handles the model can still use, so nothing breaks for the task.
+ */
+export const LEVELS: Readonly<Record<1 | 2 | 3, { profile: string; label: string; description: string }>> = {
+  1: { profile: "secrets_only", label: "Secrets", description: "Codes, passwords, cards, bank numbers and keys are hidden. Everything else is visible." },
+  2: { profile: "contacts", label: "Contacts", description: "Secrets, plus emails, phone numbers, street addresses and IPs. Names stay visible." },
+  3: { profile: "strict", label: "Everything", description: "Secrets, contacts, names, companies and places are replaced; dates shift together." },
+};
+
+/** The policy behind a privacy level (1, 2 or 3); show LEVELS[n].label and .description to the person. */
+export function loadLevel(level: number): Policy {
+  const entry = (LEVELS as Record<number, { profile: string }>)[level];
+  if (!entry) throw new PolicyError(`levels are 1, 2 and 3, got ${level}`);
+  return loadProfile(entry.profile);
 }
 
 /** One of the starter profiles shipped with the library (see `profileNames()`). */

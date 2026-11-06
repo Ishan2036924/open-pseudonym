@@ -40,11 +40,22 @@ Things to know:
   `new Session("strict", { known: { PERSON: ["Dana Reyes"] } })`.
 - Streaming: `const st = session.stream()`, then `st.feed(chunk)` for each chunk and `st.flush()` at the end.
 - Tool calls: `session.resolveArgs(args, new Sink({ tool: "browser_type", site: pageUrl }))` restores the arguments
-  and fills a secret handle only where its binding allows. Otherwise it throws `HandleRefused`.
+  and fills a secret handle only where its binding allows. Otherwise it throws `HandleRefused`. Give a tool a fixed
+  `site` only when it always acts on one target; a browser tool can be steered to any page, so resolve with the
+  page's real URL at the moment of filling.
+- Handles are bound to the exact host they came from: a code mailed by `no-reply@acme.com` fills on `acme.com`, not
+  on `docs.acme.com`, where anyone may host a form. A policy can allow subdomains on purpose by writing the site as
+  `*.acme.com` in a handle rule's `sites`; it is never inferred. A secret whose source you did not state (no
+  `Source`, or only a bare shared suffix such as `github.io`) is never filled anywhere.
+- Cards, IBANs, routing numbers and bank accounts always ask first: the profiles set `ask`, so pass an
+  `approve(handle, description, sink)` callback to the `Session` that asks the person, or the fill is refused.
+- Levels: `loadLevel(1 | 2 | 3)` gives the policy for a simple privacy switch (1 Secrets, 2 Contacts, 3 Everything),
+  and `LEVELS` holds the labels and one-line explanations to show people. Secrets are hidden at every level.
 - Chat history and JSON: `maskMessages`, `maskJson`, `maskValue`, `restoreJson`.
 - The vault: `session.vault.save(path, key)` and `Vault.load(path, key)` use AES-256-GCM with a 32-byte key you keep.
 - Proof: `session.checkEgress(payload)` looks for any real value the vault knows in the exact bytes you are about to
-  send. `session.recordEgress(log, payload, "api.example.com")` does that check and signs a chained receipt, and
+  send, and runs the detectors over the content (every key and string of a JSON payload) for personal data that was
+  never masked. `session.recordEgress(log, payload, "api.example.com")` does that check and signs a chained receipt, and
   `verifyLog(folder, publicKey, vault)` checks the log later.
 
 Positions in `masked.replacements` are UTF-16 offsets, the way JavaScript strings are indexed.
@@ -64,7 +75,8 @@ const model = wrapLanguageModel({
   model: yourModel,
   middleware: pseudonymMiddleware({
     session,
-    // where each tool's arguments are about to go, from facts your app trusts
+    // where each tool's arguments are about to go, from facts your app trusts: a fixed site only for tools with a
+    // fixed target, and for a browser the page's real URL at fill time
     sink: (toolName) => new Sink({ tool: toolName, site: currentPageUrl() }),
   }),
 });
@@ -82,7 +94,14 @@ What it does:
 | Tool calls | Inputs go through `resolveArgs` with the sink your app provides, so tools run on real values and handles are filled only where they belong. A refused handle throws (or, when streaming, becomes an error part and the call is dropped). |
 
 Options: `session`, `sink`, `revealHandles`, `source` (a `Source`, or a function of the role and tool name, to bind
-handles to a site), and `checkEgress` (throw `EgressLeak` if a known real value is still in the masked prompt).
+handles to a site), and `checkEgress`. The egress check is on by default: before the call goes out it looks in the
+JSON of the masked prompt for known real values and for personal data that was never masked, and throws `EgressLeak`
+if any is left. It checks that JSON, not the provider's final bytes, because the provider package may add fields of
+its own afterwards. Pass `checkEgress: false` to turn it off.
+
+What this does not cover: ordinary personal data (a name, a phone number) is put back into any tool call the model
+makes, because that is usually the point of the call. Secret handles are the injection-proof part: they are filled
+only on the host they are bound to, and cards and bank details ask the person first.
 
 Not covered: files and images (they cannot be masked), tool definitions and provider options. Reasoning parts are
 passed through untouched, because some providers sign them.

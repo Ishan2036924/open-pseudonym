@@ -73,7 +73,9 @@ async def test_chat_masks_request_and_restores_answer(tmp_path):
     assert "Note: {{OTP_1}} is a 6-digit one-time code" in sent["raw"]
     body = verify(r.headers["x-opn-receipt"], signer.public_key, "opn-egress+jws")
     assert body["check"]["found"] == 0 and body["dest"] == "api.openai.com"
-    assert verify_log(tmp_path / "s1", signer.public_key)["problems"] == []
+    from open_pseudonym.proxy.app import _file_id
+
+    assert verify_log(tmp_path / _file_id("s1"), signer.public_key)["problems"] == []
 
 
 @pytest.mark.anyio
@@ -172,9 +174,9 @@ async def test_known_value_in_an_unmasked_field_is_refused():
     async with client:
         await client.post("/v1/chat/completions", headers={"x-opn-session": "s"},
                           json={"model": "m", "messages": [{"role": "user", "content": MAIL}]})
+        # "model" is structural and never masked, so a known name planted there must be caught by the check
         r = await client.post("/v1/chat/completions", headers={"x-opn-session": "s"},
-                              json={"model": "m", "messages": [{"role": "user", "content": "hi"}],
-                                    "metadata": {"customer": "Dana Reyes"}})
+                              json={"model": "Dana Reyes", "messages": [{"role": "user", "content": "hi"}]})
     assert r.status_code == 422 and r.json()["error"]["type"] == "opn_egress_refused"
     assert "Dana" not in r.text
     assert len(up.seen) == 1  # the second request never left
@@ -205,7 +207,7 @@ async def test_handles_are_filled_only_for_configured_tools():
                                                                                "tool_calls": calls}}]})
 
     client, _ = client_for(Upstream(answer), profile="browse_and_fill",
-                           fill_tools={"browser_type": "https://login.acme.com"})
+                           fill_tools={"browser_type": "https://acme.com/login"})
     async with client:
         r = await client.post("/v1/chat/completions", headers={"x-opn-source-sender": "no-reply@acme.com"},
                               json={"model": "m", "messages": [{"role": "user", "content": MAIL}]})
@@ -249,3 +251,103 @@ async def test_string_arguments_stay_valid_json_when_real_values_have_quotes():
                               json={"model": "m", "messages": [{"role": "user", "content": f"meet {s_name} today"}]})
     args = r.json()["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
     assert json.loads(args) == {"who": s_name}
+
+
+@pytest.mark.anyio
+async def test_documents_names_and_metadata_are_masked_too():
+    """Critic finding: only messages/system/input used to be masked; documents and other fields went out raw."""
+    up = Upstream(lambda body: httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]}))
+    client, _ = client_for(up)
+    doc = "Patient Dana Reyes, SSN 123-45-6789, card 4111 1111 1111 1111"
+    async with client:
+        r = await client.post("/v1/messages", json={
+            "model": "m", "metadata": {"user_id": "dana.reyes@gmail.com"},
+            "messages": [{"role": "user", "name": "Dana Reyes", "content": [
+                {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": doc}},
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}},
+                {"type": "text", "text": "summarise"}]}]})
+    assert r.status_code == 200, r.text
+    raw = up.seen[0]["raw"]
+    for real in ["Dana", "dana.reyes", "123-45-6789", "4111"]:
+        assert real not in raw, real
+    assert "iVBORw0KGgo=" in raw  # images are passed through untouched
+
+
+@pytest.mark.anyio
+async def test_a_field_masking_missed_is_still_caught_by_detection():
+    from open_pseudonym.proxy.app import Proxy
+
+    up = Upstream(lambda body: httpx.Response(200, json={}))
+    client, _ = client_for(up)
+    original = Proxy.__dict__["mask_body"]  # the staticmethod itself, so it goes back exactly as it was
+    Proxy.mask_body = staticmethod(lambda s, body, source: body)  # plant a defect: masking does nothing
+    try:
+        async with client:
+            r = await client.post("/v1/chat/completions",
+                                  json={"model": "m", "messages": [{"role": "user", "content": "SSN 123-45-6789"}]})
+    finally:
+        Proxy.mask_body = original
+    assert r.status_code == 422 and up.seen == []
+
+
+@pytest.mark.anyio
+async def test_personal_data_under_a_structural_key_is_refused_not_sent():
+    """Critic finding: an SSN in an input_image 'detail' field went out with a valid receipt."""
+    up = Upstream(lambda body: httpx.Response(200, json={}))
+    client, _ = client_for(up)
+    async with client:
+        r = await client.post("/v1/responses", json={"model": "m", "input": [{"role": "user", "content": [
+            {"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgo=",
+             "detail": "Dana Reyes, SSN 123-45-6789"}]}]})
+    assert "123-45-6789" not in json.dumps(up.seen)  # masked like any text, or refused; never sent as is
+
+
+@pytest.mark.anyio
+async def test_a_fake_data_url_is_text_and_signed_thinking_is_untouched():
+    up = Upstream(lambda body: httpx.Response(200, json={"content": []}))
+    client, _ = client_for(up)
+    thinking = {"type": "thinking", "thinking": "Casey asked about Thursday.", "signature": "c2lnbmF0dXJl"}
+    async with client:
+        await client.post("/v1/messages", json={"model": "m", "messages": [
+            {"role": "user", "content": "data:text/plain;base64,not base64 at all: SSN 123-45-6789"},
+            {"role": "assistant", "content": [thinking]}]})
+    raw = up.seen[0]["raw"]
+    assert "123-45-6789" not in raw
+    assert json.dumps(thinking, separators=(",", ":")) in raw  # signed blocks go back byte for byte
+
+
+@pytest.mark.anyio
+async def test_malformed_input_is_a_400_not_a_crash():
+    client, _ = client_for(Upstream(lambda body: httpx.Response(200, json={})))
+    deep = "[" * 5000 + "]" * 5000
+    async with client:
+        r1 = await client.post("/v1/chat/completions", content=b'{"model":"m","messages":[{"role":"user","content":"\\ud800"}]}',
+                               headers={"content-type": "application/json"})
+        r2 = await client.post("/v1/chat/completions", content=deep.encode(), headers={"content-type": "application/json"})
+    assert r1.status_code == 400 and r2.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_signature_is_content_outside_reasoning_and_text_base64_is_masked():
+    """Final review findings: a 'signature' anywhere was exempt, and base64 text went out unchecked."""
+    import base64 as b64
+
+    up = Upstream(lambda body: httpx.Response(200, json={"content": []}))
+    client, _ = client_for(up)
+    doc = b64.b64encode(b"Patient Dana Reyes, SSN 123-45-6789").decode()
+    async with client:
+        r = await client.post("/v1/messages?user=dana.reyes@gmail.com", json={
+            "model": "m", "metadata": {"signature": "call me at (617) 555-0142"},
+            "messages": [{"role": "user", "content": [
+                {"type": "document", "source": {"type": "base64", "media_type": "text/plain", "data": doc}}]}]})
+        assert r.status_code == 422  # the query string carried an email
+        r = await client.post("/v1/messages", json={
+            "model": "m", "metadata": {"signature": "call me at (617) 555-0142"},
+            "messages": [{"role": "user", "content": [
+                {"type": "document", "source": {"type": "base64", "media_type": "text/plain", "data": doc}}]}]})
+    assert r.status_code == 200, r.text
+    raw = up.seen[0]["raw"]
+    assert "555-0142" not in raw
+    sent = json.loads(raw)["messages"][0]["content"][0]["source"]["data"]
+    decoded = b64.b64decode(sent).decode()
+    assert "Dana" not in decoded and "123-45-6789" not in decoded

@@ -16,7 +16,7 @@ import * as checks from "./checks.ts";
 import * as dates from "./dates.ts";
 import { patterns as sharedPatterns, type PatternSpec } from "./data.ts";
 import { checkTypeName } from "./types.ts";
-import { cmpCodePoints, cpLength, escapeRegExp, findAll } from "./util.ts";
+import { cmpCodePoints, cpLength, escapeRegExp, findAll, splitWs } from "./util.ts";
 
 const NB = "(?<![A-Za-z0-9_])";
 const NA = "(?![A-Za-z0-9_])";
@@ -116,7 +116,8 @@ export class KnownDetector {
   static readonly PRIORITY = 100;
   private readonly lookup = new Map<string, string>();
   private readonly regexes: [RegExp, "case" | "nocase"][] = [];
-  private readonly digitForms: [RegExp, string][] = [];
+  private readonly digitTypes = new Map<string, string>();
+  private readonly digitRe: RegExp | null = null;
 
   constructor(forms: Iterable<Form>) {
     const byMode: Record<string, [string, string][]> = { case: [], nocase: [], digits: [] };
@@ -130,13 +131,13 @@ export class KnownDetector {
     const caseAlts: string[] = [];
     for (const [type, text] of byMode.case) {
       for (const variant of new Set([text, text.toUpperCase()])) {
-        this.lookup.set(JSON.stringify(["case", variant]), type);
+        this.lookup.set(JSON.stringify(["case", squash(variant)]), type);
         caseAlts.push(variant);
       }
     }
     const nocaseAlts: string[] = [];
     for (const [type, text] of byMode.nocase) {
-      this.lookup.set(JSON.stringify(["nocase", text.toLowerCase()]), type);
+      this.lookup.set(JSON.stringify(["nocase", squash(text).toLowerCase()]), type);
       nocaseAlts.push(text);
     }
     if (caseAlts.length > 0) {
@@ -145,11 +146,14 @@ export class KnownDetector {
     if (nocaseAlts.length > 0) {
       this.regexes.push([new RegExp(NB + "(" + alternation(nocaseAlts) + ")" + NA, "giu"), "nocase"]);
     }
+    // all known numbers in one regex; a match is mapped back to its type by its digits
     for (const [type, digits] of byMode.digits) {
-      if (digits.length >= 6) {
-        const pattern = "(?<![0-9])[(+]?" + [...digits].join("[ .()+-]{0,2}") + "(?![0-9])";
-        this.digitForms.push([new RegExp(pattern, "gu"), type]);
-      }
+      if (digits.length >= 6 && !this.digitTypes.has(digits)) this.digitTypes.set(digits, type);
+    }
+    if (this.digitTypes.size > 0) {
+      const alts = [...this.digitTypes.keys()].sort((a, b) => cpLength(b) - cpLength(a) || cmpCodePoints(a, b));
+      const body = alts.map((d) => [...d].join("[ .()+-]{0,2}")).join("|");
+      this.digitRe = new RegExp("(?<![0-9])[(+]?(?:" + body + ")(?![0-9])", "gu");
     }
   }
 
@@ -157,24 +161,33 @@ export class KnownDetector {
     const out: Span[] = [];
     for (const [regex, mode] of this.regexes) {
       for (const m of findAll(regex, text)) {
-        const key = mode === "case" ? m[1] : m[1].toLowerCase();
+        const key = mode === "case" ? squash(m[1]) : squash(m[1]).toLowerCase();
         const type = this.lookup.get(JSON.stringify([mode, key]));
         if (type) out.push(span(m.index, m.index + m[1].length, type, m[1], "known", KnownDetector.PRIORITY));
       }
     }
-    for (const [regex, type] of this.digitForms) {
-      for (const m of findAll(regex, text)) {
-        out.push(span(m.index, m.index + m[0].length, type, m[0], "known", KnownDetector.PRIORITY));
+    if (this.digitRe !== null) {
+      for (const m of findAll(this.digitRe, text)) {
+        const type = this.digitTypes.get(m[0].replace(/[^0-9]/g, ""));
+        if (type) out.push(span(m.index, m.index + m[0].length, type, m[0], "known", KnownDetector.PRIORITY));
       }
     }
     return out;
   }
 }
 
+// any run of whitespace, as one regex piece
+const WS_PIECE = "[ \\t\\r\\n\\u00a0]+";
+
+/** Runs of whitespace as one space, so "Dana  Reyes" and "Dana\nReyes" look up the same entry. */
+function squash(text: string): string {
+  return splitWs(text.replaceAll("\u00a0", " ")).join(" ");
+}
+
 function alternation(alts: string[]): string {
-  // longest first, so "Dana Reyes" wins over "Dana"
-  const sorted = [...new Set(alts)].sort((a, b) => cpLength(b) - cpLength(a) || cmpCodePoints(a, b));
-  return sorted.map(escapeRegExp).join("|");
+  // longest first, so "Dana Reyes" wins over "Dana"; words may be split by any run of whitespace
+  const sorted = [...new Set(alts.map(squash))].sort((a, b) => cpLength(b) - cpLength(a) || cmpCodePoints(a, b));
+  return sorted.map((a) => a.split(" ").map(escapeRegExp).join(WS_PIECE)).join("|");
 }
 
 /** Pick non-overlapping spans: higher priority first, then longer, then earlier. Returned in text order. */

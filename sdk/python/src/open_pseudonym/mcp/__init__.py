@@ -9,7 +9,8 @@ Two ways in:
 
   - Someone else's server, unchanged: run the gateway in front of it.
 
-        opn mcp-gateway --profile browse_and_fill -- npx some-mcp-server
+        opn mcp-gateway --profile browse_and_fill --source-site acme.com \\
+            --tool-site browser_type=https://login.acme.com -- npx some-mcp-server
 
 The model only ever sees stand-ins. When it calls a tool, fakes turn back into real values and secret handles are
 filled in only if the handle's binding allows that tool and its site. A refused handle comes back to the model as a
@@ -18,6 +19,7 @@ tool error carrying the short reason ("bound to a different site"), never the va
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import Any, Callable
 
@@ -43,8 +45,9 @@ class PseudonymMiddleware:
     """MCP server middleware (works on MCPServer and the low-level Server).
 
     session:    the Session to use, or a callable that picks one per request (multi-user servers)
-    site:       the site this server acts on (its tools' target), used as the sink for handles
-    tool_sites: per-tool sites when different tools act on different sites
+    site:       the site every tool of this server acts on, used as the sink for handles. Only set it if that is
+                really true of every tool; a server that can also send email should use tool_sites instead
+    tool_sites: per-tool sites, the safe way to say which tool acts where
     source_for: given (tool name, raw result), the Source of what the tool returned; set it only from facts the
                 server trusts (a verified email sender), never from the result's text
     """
@@ -57,6 +60,13 @@ class PseudonymMiddleware:
         self.source_for = source_for
 
     async def __call__(self, ctx, call_next):
+        if ctx.method in ("resources/read", "prompts/get"):
+            # resources and prompts reach the model too; mask their text the same way. A resource address the
+            # host got from an earlier masked listing is turned back into the real one first.
+            s = self._session(ctx)
+            if ctx.method == "resources/read" and isinstance(ctx.params, dict) and isinstance(ctx.params.get("uri"), str):
+                ctx = replace(ctx, params={**ctx.params, "uri": s.restore_keep_handles(ctx.params["uri"])})
+            return _checked(s, mask_content(s, await call_next(ctx)))
         if ctx.method != "tools/call" or not isinstance(ctx.params, dict):
             return await call_next(ctx)
         s = self._session(ctx)
@@ -68,7 +78,7 @@ class PseudonymMiddleware:
             return _refused(exc.reason)
         params["arguments"] = resolved.args
         result = await call_next(replace(ctx, params=params))
-        return mask_result(s, result, self.source_for(name, result) if self.source_for else None)
+        return _checked(s, mask_result(s, result, self.source_for(name, result) if self.source_for else None))
 
 
 def mask_result(s: Session, result: Any, source: Source | None = None) -> Any:
@@ -98,6 +108,27 @@ def mask_result(s: Session, result: Any, source: Source | None = None) -> Any:
     return model.model_copy(update={"content": content, "structured_content": structured})
 
 
+def _checked(s: Session, result: Any) -> Any:
+    """The same egress check the proxy runs: if anything personal is still in the masked result, the host gets an
+    error instead of the result."""
+    doc = result.model_dump(mode="json", by_alias=True, exclude_none=True) if hasattr(result, "model_dump") else result
+    leaks = s.check_egress(json.dumps(doc, ensure_ascii=False))
+    if leaks:
+        types = ", ".join(sorted({lk.type for lk in leaks}))
+        return CallToolResult(content=[TextContent(type="text", text=f"Withheld: {types} data could not be hidden.")],
+                              is_error=True)
+    return result
+
+
+def mask_content(s: Session, result: Any) -> Any:
+    """Mask a resources/read or prompts/get result: every text field, leaving URIs and blobs alone."""
+    if result is None:
+        return result
+    doc = result.model_dump(mode="json", by_alias=True, exclude_none=True) if hasattr(result, "model_dump") else result
+    masked, _ = s.mask_value(doc)
+    return masked
+
+
 def build_gateway(upstream: Client, session: Session, *, name: str = "open-pseudonym-gateway",
                   site: str | None = None, tool_sites: dict[str, str] | None = None,
                   source_for: SourceFor | None = None) -> Server:
@@ -109,7 +140,20 @@ def build_gateway(upstream: Client, session: Session, *, name: str = "open-pseud
     async def call_tool(ctx, params: CallToolRequestParams):
         return await upstream.call_tool(params.name, params.arguments or {})
 
-    server = Server(name, on_list_tools=list_tools, on_call_tool=call_tool)
+    async def list_resources(ctx, params):
+        return await upstream.list_resources()
+
+    async def read_resource(ctx, params):
+        return await upstream.read_resource(str(params.uri))
+
+    async def list_prompts(ctx, params):
+        return await upstream.list_prompts()
+
+    async def get_prompt(ctx, params):
+        return await upstream.get_prompt(params.name, params.arguments or {})
+
+    server = Server(name, on_list_tools=list_tools, on_call_tool=call_tool, on_list_resources=list_resources,
+                    on_read_resource=read_resource, on_list_prompts=list_prompts, on_get_prompt=get_prompt)
     server.middleware.append(PseudonymMiddleware(session, site=site, tool_sites=tool_sites, source_for=source_for))
     return server
 
@@ -122,4 +166,4 @@ async def run_gateway(upstream_target: Any, session: Session, **kw) -> None:
             await server.run(read, write, server.create_initialization_options())
 
 
-__all__ = ["PseudonymMiddleware", "build_gateway", "mask_result", "run_gateway"]
+__all__ = ["PseudonymMiddleware", "build_gateway", "mask_content", "mask_result", "run_gateway"]

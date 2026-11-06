@@ -32,8 +32,6 @@ const GENERIC_MAILBOXES = new Set([
 ]);
 const GENERIC_SUBDOMAINS = new Set(["www", "docs", "mail", "app", "login", "api", "blog", "shop", "support", "help",
   "m", "accounts", "auth", "id", "portal", "my"]);
-const TWO_PART_SUFFIXES = new Set(["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz",
-  "co.jp", "co.in", "com.br", "com.mx", "co.za", "com.sg", "com.cn", "com.tr", "co.kr"]);
 const AREA_CODES = ["201", "212", "312", "415", "512", "617", "720", "206", "305", "404"];
 const TEST_NETS = ["192.0.2.", "198.51.100.", "203.0.113."];
 const ORG_SUFFIX = / (Inc|LLC|Ltd|Corp|Corporation|GmbH|PLC|LLP|Co)(\.?)$/;
@@ -109,9 +107,28 @@ export function fillTemplate(template: string, digits: string): string {
   return template.replace(/[0-9]/g, () => digits[i++]);
 }
 
+let suffixCache: ReadonlySet<string> | null = null;
+
+function suffixes(): ReadonlySet<string> {
+  if (suffixCache === null) suffixCache = new Set(pools().public_suffixes);
+  return suffixCache;
+}
+
+/**
+ * The part of a host that one owner controls: acme.com for login.acme.com, acme.github.io for acme.github.io. Uses
+ * the suffix list in pools.json, a small subset of the Public Suffix List; implementations with the full list should
+ * use it.
+ */
+export function isPublicSuffix(host: string): boolean {
+  return suffixes().has(host.toLowerCase().replace(/\.+$/, ""));
+}
+
 export function registrable(host: string): string {
   const labels = host.toLowerCase().replace(/\.+$/, "").split(".");
-  if (labels.length >= 3 && TWO_PART_SUFFIXES.has(labels.slice(-2).join("."))) return labels.slice(-3).join(".");
+  const known = suffixes();
+  for (let n = labels.length - 1; n > 0; n--) { // longest known suffix first
+    if (known.has(labels.slice(-n).join("."))) return labels.slice(-(n + 1)).join(".");
+  }
   return labels.slice(-2).join(".");
 }
 
@@ -267,9 +284,12 @@ export function url(ctx: Ctx, real: string): string {
   const restTokens = m[4].match(/[A-Za-z0-9]+|[^A-Za-z0-9]/gu) ?? [];
   const out: string[] = [];
   let afterEquals = false;
+  const nameParts = [...ctx.vault.parts.keys()].filter((p) => [...p].length >= 3);
   for (const tok of restTokens) {
+    const low = tok.toLowerCase();
+    // a slug like /in/danareyes carries a name even without separators, so look inside each piece
     const interesting = afterEquals || [...tok].length >= 12 || [...tok].some(isDigitChar) ||
-      ctx.vault.parts.has(tok.toLowerCase());
+      nameParts.some((part) => low.includes(part));
     out.push(isAlnumChar(tok) && interesting ? shape(ctx, tok, "url") : tok);
     afterEquals = tok === "=";
   }

@@ -51,5 +51,5 @@ Profile for detection: strict. No model involved; costs nothing.
 
 - restore(mask(x)) == x: 134/134
 - streamed restore == whole restore: 134/134
-- mask: median 0.38 ms, p95 0.60 ms per item
-- restore: median 0.12 ms per item
+- mask: median 0.49 ms, p95 0.72 ms per item
+- restore: median 0.11 ms per item

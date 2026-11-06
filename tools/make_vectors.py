@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "sdk/python/src"))
 
-from open_pseudonym import HandleRefused, Policy, Session, Signer, Sink, Source, Vault, load_profile  # noqa: E402
+from open_pseudonym import HandleRefused, Session, Signer, Sink, Source, Vault, load_profile  # noqa: E402
 from open_pseudonym import checks  # noqa: E402
 from open_pseudonym.drbg import Drbg  # noqa: E402
 from open_pseudonym.fpe import FF1  # noqa: E402
@@ -208,8 +208,9 @@ def scenario_vectors():
         {"op": "restore", "text": "__MASKED__", "reveal": True},
         {"op": "restore", "text": "Sounds good {{OTP_1}} [PERSON_9]"},
         {"op": "resolve", "args": {"field": "#otp", "text": "{{OTP_1}}"}, "sink": {"tool": "type", "site": "https://evil.example"}},
-        {"op": "resolve", "args": {"field": "#otp", "text": "{{OTP_1}}"}, "sink": {"tool": "type", "site": "https://login.acme.com"}},
         {"op": "resolve", "args": {"text": "{{OTP_1}}"}, "sink": {"tool": "type", "site": "https://login.acme.com"}},
+        {"op": "resolve", "args": {"field": "#otp", "text": "{{OTP_1}}"}, "sink": {"tool": "type", "site": "https://acme.com/login"}},
+        {"op": "resolve", "args": {"text": "{{OTP_1}}"}, "sink": {"tool": "type", "site": "https://acme.com/login"}},
         {"op": "egress", "payload": "__MASKED__"},
         {"op": "egress", "payload": "__MASKED__ Dana"},
     ])
@@ -235,7 +236,7 @@ def scenario_vectors():
         {"op": "mask", "text": "card 4242 4242 4242 4242 for May Chen"},
         {"op": "egress", "payload": "4242424242424242"},
         {"op": "egress", "payload": "[4242424242424242]"},
-        {"op": "egress", "payload": "see you May 5"},
+        {"op": "egress", "payload": "see you in May"},
         {"op": "egress", "payload": "Chen said hi"},
     ], known={"PERSON": ["May Chen"]})
     scenario("logs use stable tokens", "logs", [
@@ -268,10 +269,11 @@ def scenario_vectors():
         sc["steps"] = fresh
     mail = scenarios[0]["steps"]
     mail_checks(mail)
-    assert mail[3]["expect"] == {"refused": "bound to a different site"}
-    assert mail[4]["expect"] == {"args": {"field": "#otp", "text": "482913"}}
-    assert mail[5]["expect"] == {"refused": "already used"}
-    assert mail[6]["expect"] == [] and "PERSON" in mail[7]["expect"]
+    assert mail[3]["expect"] == {"refused": "bound to a different site"}  # evil.example
+    assert mail[4]["expect"] == {"refused": "bound to a different site"}  # a subdomain is not the bound host
+    assert mail[5]["expect"] == {"args": {"field": "#otp", "text": "482913"}}
+    assert mail[6]["expect"] == {"refused": "already used"}
+    assert mail[7]["expect"] == [] and "PERSON" in mail[8]["expect"]
     eg = next(sc for sc in scenarios if sc["name"].startswith("egress reads"))["steps"]
     assert [st["expect"] for st in eg[1:]] == [["CARD"], ["CARD"], [], ["PERSON"]]
     strict = scenarios[2]["steps"]

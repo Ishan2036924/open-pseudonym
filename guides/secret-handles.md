@@ -31,10 +31,11 @@ number into a checkout form, an API key into a config file. For these, the model
 | Check | Refusal reason |
 |---|---|
 | The handle exists in this session | `unknown handle` |
-| Not past its expiry (codes: from "expires in N minutes", else the policy's `ttl_s`) | `expired` |
+| It is bound to a site or a tool at all (fail closed) | `not bound to a site or tool` |
+| Not past its expiry (the policy's `ttl_s`; a phrase like "expires in 5 minutes" can only shorten it) | `expired` |
 | Uses left (codes: one) | `already used` |
 | The tool is in the policy's `tools` list, if there is one | `not allowed for this tool` |
-| The sink's host is the bound site or a subdomain of it | `bound to a different site` |
+| The sink's host is exactly the bound host (or matches a `*.example.com` entry the policy lists) | `bound to a different site` |
 | `ask` is set, or this is a new tool and site pair and you registered `approve` | `needs the person's approval` / `not approved` |
 
 If any handle in a call fails, nothing in that call is filled. The browser filler also checks that the value is not
@@ -45,5 +46,8 @@ showing in the page afterwards, clears the field if it is, and masks filled fiel
 - Set `Source` and `Sink` from facts your app trusts: a DKIM-verified sender, the browser's real URL, the tool's fixed
   target. Never from text the model wrote or read.
 - Give `approve` a real person on the other end for anything that moves money or identity documents.
-- The model may write `{{OTP_1}}` into a message to someone else. `resolve_args` refuses that unless the policy's
-  `tools` or `sites` allow it, which is why browse-and-fill profiles should list their tools.
+- The model may write `{{OTP_1}}` into a message to someone else. `resolve_args` refuses that, because the message
+  tool's sink is not the bound host. Listing `tools` in the policy narrows it further.
+- Cards and bank details ask every time (the starter profiles set `ask`); wire `approve` to a real person.
+- A code from accounts.example.com does not fill on login.example.com unless the policy says `*.example.com` on
+  purpose: subdomains can belong to other people (user pages, shared forms).

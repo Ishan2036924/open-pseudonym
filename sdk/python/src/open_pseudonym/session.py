@@ -11,6 +11,7 @@ Everything the model sees goes through `mask`; everything it says comes back thr
 
 from __future__ import annotations
 
+import base64
 import copy
 import datetime as dt
 import hashlib
@@ -25,26 +26,76 @@ from typing import Any, Callable, Iterable
 from . import dates, fakes, handles
 from .checks import aba_ok, luhn_ok, ssn_ok
 from .detect import KnownDetector, PatternDetector, Span, resolve
-from .egress import EgressLog, Leak, check as egress_check
+from .egress import EgressLeak, EgressLog, Leak, check as egress_check, known_mode
 from .fakes import Ctx, fill_template
 from .fpe import FF1
 from .handles import HANDLE, HandleRefused, Sink, Source
-from .jws import Signer
 from .policy import Policy, Rule, load_profile
 from .restore import Restorer, StreamRestorer
-from .types import CASELESS_TYPES, DIGIT_TYPES, digits_of, normalize
+from .types import DIGIT_TYPES, digits_of, normalize
 from .vault import Entry, Vault
 
+MAX_TEXT_TTL = 3600  # an expiry read from text alone is capped at one hour
 GENERAL = {
     "PERSON": "someone", "ORG": "an organization", "LOCATION": "a place", "ADDRESS": "a street address",
     "EMAIL": "an email address", "PHONE": "a phone number", "URL": "a web link", "IP_ADDRESS": "an IP address",
 }
 MONEY_PREFIX = re.compile(r"^([$€£])( ?)([0-9][0-9,]*)(\.[0-9]{2})?$")
 MONEY_SUFFIX = re.compile(r"^([0-9][0-9,]*)(\.[0-9]{2})?( ?)(USD|EUR|GBP|dollars|euros)$")
-# keys whose string values are structure, not content, when masking chat messages
-SKIP_KEYS = frozenset({"role", "type", "id", "name", "tool_call_id", "tool_use_id", "call_id", "model",
-                       "image_url", "source", "data", "media_type", "signature", "cache_control", "status",
-                       "finish_reason", "stop_reason", "object", "index", "format", "detail", "mime_type"})
+# Keys whose string values must reach the provider exactly as written, or the protocol breaks: ids that come back,
+# roles, the model name, media types, and signed or encrypted blobs. Masking leaves them alone; the egress check still
+# reads them, so personal data hidden under one of these names stops the request instead of slipping out.
+SKIP_KEYS = frozenset({"role", "type", "id", "tool_call_id", "tool_use_id", "call_id", "media_type",
+                       "mime_type", "mimeType", "cache_control",
+                       # the same structure as the Vercel AI SDK spells it
+                       "toolCallId", "toolName", "mediaType"})
+# Only at the top of a request body: the model name.
+TOP_KEYS = frozenset({"model"})
+REASONING_TYPES = frozenset({"thinking", "redacted_thinking", "reasoning"})
+_BASE64 = re.compile(r"[A-Za-z0-9+/=_\-\s]*")
+
+
+def is_binary(key: str | None, value: str, parent: dict | None) -> bool:
+    """Real base64 payloads (images, PDFs) are not text we can mask; leave them byte for byte. Only strings that
+    really are base64 count, so text dressed up as a data: URL is still masked and checked."""
+    if value.startswith("data:") and ";base64," in value[:100]:
+        return _BASE64.fullmatch(value.split(";base64,", 1)[1]) is not None
+    if key == "data" and parent is not None and parent.get("type") == "base64":
+        return _BASE64.fullmatch(value) is not None
+    return False
+
+
+def is_signed_thinking(key: str | None, parent: dict | None) -> bool:
+    """Model reasoning blocks are signed or encrypted by the provider and must go back unchanged. The model only
+    ever saw stand-ins, so they hold stand-ins, never real values. Only inside such a block: a `signature` key
+    anywhere else is ordinary content."""
+    kind = parent.get("type") if parent is not None else None
+    if not isinstance(kind, str) or kind not in REASONING_TYPES:  # odd input (a list as type) is just content
+        return False
+    return key in ("thinking", "signature", "encrypted_content") or (
+        key == "data" and parent.get("type") == "redacted_thinking")
+
+
+_TEXT_MEDIA = re.compile(r"^(text/|application/(json|xml|csv|x-yaml|yaml))", re.IGNORECASE)
+
+
+def text_base64(key: str | None, value: str, parent: dict | None) -> tuple[str, str, str] | None:
+    """Base64 that holds text (a data:text/plain URL, a text document sent as base64): returns (prefix, media type,
+    decoded text) so it can be masked and checked like any text. None for real binary such as images and PDFs."""
+    if value.startswith("data:") and ";base64," in value[:100]:
+        head, body = value.split(";base64,", 1)
+        media = head[5:]
+    elif key == "data" and parent is not None and parent.get("type") == "base64":
+        head, body, media = None, value, str(parent.get("media_type") or parent.get("mediaType") or "")
+    else:
+        return None
+    if not _TEXT_MEDIA.match(media):
+        return None
+    try:
+        text = base64.b64decode(body, validate=False).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return (head + ";base64," if head is not None else "", media, text)
 
 
 class RefusedData(Exception):
@@ -92,6 +143,7 @@ class Session:
         clock: Callable[[], float] | None = None,
         approve: Callable[[str, str, Sink], bool] | None = None,
         session_id: str | None = None,
+        masked_input: bool = False,
     ):
         self.policy = load_profile(policy) if isinstance(policy, str) else policy
         self.vault = vault or Vault()
@@ -102,6 +154,9 @@ class Session:
         self.clock = clock or time.time
         self.approve = approve
         self.id = session_id or uuid.uuid4().hex
+        # By default every input is treated as real: a real name that happens to equal an earlier fake is masked
+        # like any other value. Set masked_input=True only if you feed back text that already went through mask().
+        self.masked_input = masked_input
         self._patterns = PatternDetector(extra_patterns, dayfirst, self._year)
         self._known_cache: tuple[int, KnownDetector] | None = None
         self._restorer_cache: Restorer | None = None
@@ -121,19 +176,23 @@ class Session:
         if self._known_cache and self._known_cache[0] == self.vault.version:
             return self._known_cache[1]
         forms = []
+        from ._data import pools as _pools
+
+        stop_words = {w.lower() for w in _pools()["name_stopwords"]}
         for t, values in self.known.items():
             for v in values:
-                forms.append((t, v, "nocase" if t in CASELESS_TYPES else "case"))
+                forms.append((t, v, known_mode(t, v)))
+                if t == "PERSON" and len(v.split()) > 1:
+                    # the app vouched for this person, so "Dana called" and "Reyes, Dana" are them too
+                    forms.extend(("PERSON", w, "case") for w in v.split() if len(w) >= 2 and w.lower() not in stop_words)
         for e in self.vault.entries:
             if e.type in ("DATE", "MONEY"):
                 continue  # the patterns find these again, and their stand-ins depend on the format
             for real in set(e.surfaces.values()):
-                if e.type in DIGIT_TYPES:
+                if e.type in DIGIT_TYPES and len(digits_of(real)) >= 6:
                     forms.append((e.type, digits_of(real), "digits"))
-                elif e.type in CASELESS_TYPES:
-                    forms.append((e.type, real, "nocase"))
                 else:
-                    forms.append((e.type, real, "case"))
+                    forms.append((e.type, real, known_mode(e.type, real)))
         from ._data import pools
 
         stop = {w.lower() for w in pools()["name_stopwords"]}
@@ -158,7 +217,10 @@ class Session:
         for d in self.extra_detectors:
             spans.extend(d.detect(text))
         chosen = resolve(spans)
-        return [s for s in chosen if s.text.lower() not in self.allow and not self.vault.is_stand_in(s.text)]
+        return [s for s in chosen if s.text.lower() not in self.allow and not self._is_ours(s.text)]
+
+    def _is_ours(self, text: str) -> bool:
+        return self.masked_input and self.vault.is_stand_in(text)
 
     # Masking
 
@@ -174,7 +236,7 @@ class Session:
             # like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
             todo = [sp for sp in resolve(self._known_detector().detect(text))
                     if not any(sp.start < o.end and o.start < sp.end for o in spans)
-                    and sp.text.lower() not in self.allow and not self.vault.is_stand_in(sp.text)]
+                    and sp.text.lower() not in self.allow and not self._is_ours(sp.text)]
             if not todo:
                 break
             spans = sorted(spans + todo, key=lambda sp: sp.start)
@@ -296,8 +358,14 @@ class Session:
         sites = list(rule.options.get("sites") or [])
         if not sites and source is not None and source.bound_site():
             sites = [source.bound_site()]
-        ttl = (handles.ttl_from_text(text) if type_ == "OTP" else None) or rule.options.get("ttl_s")
-        expires = self.now() + int(ttl) if ttl else None
+        # text is untrusted: a phrase like "valid for 999 hours" may only shorten the policy's limit, never extend it
+        text_ttl = handles.ttl_from_text(text) if type_ == "OTP" else None
+        policy_ttl = rule.options.get("ttl_s")
+        limits = [x for x in (text_ttl, policy_ttl) if x is not None]
+        if text_ttl is not None and policy_ttl is None:
+            limits.append(MAX_TEXT_TTL)
+        ttl = min(limits) if limits else None
+        expires = self.now() + int(ttl) if ttl is not None else None  # 0 means already expired, not never
         return {
             "sites": sites,
             "tools": rule.options.get("tools"),
@@ -384,12 +452,36 @@ class Session:
     # JSON and chat messages
 
     def mask_json(self, value: Any, source: Source | None = None) -> tuple[Any, list[str]]:
+        """Mask a JSON value that is data (a tool result): every string, and the keys too, since a result keyed by
+        email address is as personal as one with emails in it."""
         notes: list[str] = []
-        return self._mask_tree(value, source, notes, skip_keys=frozenset()), notes
+        return self._mask_tree(self._mask_keys(value, source, notes), source, notes, skip_keys=frozenset()), notes
 
-    def _mask_tree(self, v: Any, source, notes: list[str], skip_keys: frozenset, key: str | None = None) -> Any:
+    def _mask_keys(self, v: Any, source, notes: list[str]) -> Any:
+        if isinstance(v, dict):
+            out = {}
+            for k, x in v.items():
+                m = self.mask(k, source) if isinstance(k, str) else None
+                if m is not None:
+                    notes.extend(n for n in m.notes if n not in notes)
+                out[m.text if m is not None else k] = self._mask_keys(x, source, notes)
+            return out
+        if isinstance(v, list):
+            return [self._mask_keys(x, source, notes) for x in v]
+        return v
+
+    def _mask_tree(self, v: Any, source, notes: list[str], skip_keys: frozenset, key: str | None = None,
+                   parent: dict | None = None) -> Any:
         if isinstance(v, str):
-            if key in skip_keys:
+            if key in skip_keys or is_signed_thinking(key, parent):
+                return v
+            decoded = text_base64(key, v, parent)
+            if decoded is not None:  # text sent as base64: mask the text, send it back as base64
+                prefix, _, text = decoded
+                m = self.mask(text, source)
+                notes.extend(n for n in m.notes if n not in notes)
+                return prefix + base64.b64encode(m.text.encode("utf-8")).decode("ascii")
+            if is_binary(key, v, parent):
                 return v
             if key == "arguments" and v.strip().startswith(("{", "[")):
                 try:
@@ -405,9 +497,9 @@ class Session:
                     notes.append(n)
             return m.text
         if isinstance(v, dict):
-            return {k: self._mask_tree(x, source, notes, skip_keys, k) for k, x in v.items()}
+            return {k: self._mask_tree(x, source, notes, skip_keys, k, v) for k, x in v.items()}
         if isinstance(v, list):
-            return [self._mask_tree(x, source, notes, skip_keys, key) for x in v]
+            return [self._mask_tree(x, source, notes, skip_keys, key, parent) for x in v]
         return v
 
     def mask_messages(self, messages: list, source: Source | None = None) -> tuple[list, list[str]]:
@@ -538,12 +630,56 @@ class Session:
     # Egress
 
     def check_egress(self, payload: bytes | str) -> list[Leak]:
-        return egress_check(self.vault, payload, self.restorer())
+        """Two checks on the exact bytes about to leave: every real value the vault knows, and a fresh detection pass
+        over the content fields, so a field that was never masked (a document, a metadata note) is caught too."""
+        leaks = egress_check(self.vault, payload, self.restorer())
+        seen = {(lk.type, lk.entry_id) for lk in leaks}
+        for span in self.detect(content_text(payload)):
+            if self.policy.rule_for(span.type).action != "keep" and not self.vault.is_stand_in(span.text):
+                if (span.type, "detected") not in seen:
+                    seen.add((span.type, "detected"))
+                    leaks.append(Leak(span.type, "detected"))
+        return leaks
 
     def record_egress(self, log: EgressLog, payload: bytes, dest: str) -> str:
         """Check the exact bytes about to be sent and sign a receipt. Raises EgressLeak instead of sending a leak."""
+        leaks = self.check_egress(payload)
+        if leaks:
+            raise EgressLeak(leaks)
         return log.record(self.vault, payload, session=self.id, policy_digest=self.policy.digest, dest=dest,
                           now=self.now(), detectors=self.detector_names(), restorer=self.restorer())
+
+
+def content_text(payload: bytes | str) -> str:
+    """Everything in a payload a person could have written, as text, for the detection pass: for JSON every key and
+    every string except the top-level model name, signed or encrypted reasoning and real binary base64 (text sent as
+    base64 is decoded and read). Plain text is used as is."""
+    raw = payload.decode("utf-8", errors="replace") if isinstance(payload, bytes) else payload
+    try:
+        doc = json.loads(raw)
+    except (ValueError, RecursionError):
+        return raw
+    out: list[str] = []
+    stack = [(doc, None, None)]
+    while stack:  # a loop, not recursion, so deeply nested JSON cannot crash the check
+        v, key, parent = stack.pop()
+        if isinstance(v, str):
+            if (key in TOP_KEYS and parent is doc) or is_signed_thinking(key, parent):
+                continue
+            decoded = text_base64(key, v, parent)
+            if decoded is not None:
+                out.append(decoded[2])
+            elif not is_binary(key, v, parent):
+                out.append(v)
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                out.append(str(k))
+                stack.append((x, k, v))
+        elif isinstance(v, list):
+            stack.extend((x, key, parent) for x in v)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            out.append(str(v))
+    return "\n".join(out)
 
 
 def _strings(v: Any):

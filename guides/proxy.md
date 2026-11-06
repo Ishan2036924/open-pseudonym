@@ -1,6 +1,9 @@
 # The local proxy
 
-The proxy speaks the providers' own APIs, so an app gets protection by changing its base URL and nothing else.
+The proxy speaks the providers' own APIs, so an app gets protection by changing its base URL and nothing else. It
+masks the whole request body (messages, system prompt, documents, names, metadata, tool descriptions), leaving only
+structural fields such as the model name and base64 images alone, and refuses to send anything the egress check
+still finds.
 
 ```bash
 pip install "open-pseudonym[proxy]"
@@ -33,8 +36,11 @@ Fakes in tool-call arguments always come back as real values. Handles come back 
 resolve with `Session.resolve_args`, unless you let the proxy fill them for a tool whose target it knows:
 
 ```bash
-opn proxy --profile browse_and_fill --fill-tool browser_type=https://login.example.com
+opn proxy --profile browse_and_fill --fill-tool submit_code=https://login.example.com
 ```
+
+Only name tools whose target never changes (a tool that always posts to one login endpoint). A browser
+tool can be steered to any page, so for browsers use `HandleFiller`, which reads the real page URL at fill time.
 
 ## In-process, for async clients
 

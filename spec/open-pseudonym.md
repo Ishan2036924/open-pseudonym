@@ -91,9 +91,12 @@ right. The value is capture group `group`. If the pattern names a `check`, the v
 
 **4.2 Known values.** Every real value held by the vault is matched again in new text, so a value that was hidden once
 stays hidden even without the cue that found it. Apps may also pass lists (their contacts, their own company). Matching
-modes: names and other text match as written or in all capitals; emails and URLs in any case; digit types (six or
-more digits) match the same digits with up to two of the characters ` .()+-` between each pair, optionally starting
-with `(` or `+`. Name parts (each token of a faked person,
+modes: emails and URLs in any case; names, organisations, places and addresses of two or more words in any case
+("dana reyes" is still Dana Reyes); single words as written or in all capitals (so the name Iris does not catch the
+word iris); digit types with six or more digits by the same digits with up to two of the characters ` .()+-` between
+each pair, optionally starting with `(` or `+`; shorter digit values (a 4-digit code) exactly as written. For a
+person the app lists with two or more words, each word is also a known value, so "Dana called" is caught once the
+app says Dana Reyes is a contact. Name parts (each token of a faked person,
 except stopwords and one-letter tokens) are known values of type `PERSON`. Dates and amounts are not matched this way;
 the patterns find them. Known values have priority 100.
 
@@ -104,8 +107,10 @@ their own priority; the reference adapters use 30.
 type name. Walk the list and keep a span unless it overlaps one already kept. Then:
 
 - drop spans whose text equals (case-insensitive) a value on the session's allow list or the policy's `allow` list;
-- drop spans whose text equals (case-insensitive) a stand-in this vault issued. This makes masking idempotent: masked
-  text masked again is unchanged.
+- only if the app declares that its input may already contain stand-ins (`masked_input`), drop spans whose text
+  equals (case-insensitive) a stand-in this vault issued, which makes masking idempotent. By default input is
+  treated as real: a real name that happens to equal an earlier fake is masked like any other value (otherwise it
+  would reach the model as is, and restore would turn it into the wrong person).
 
 ## 5. Policies
 
@@ -137,23 +142,29 @@ Actions and their strength (how much they hide):
 | `refuse` | 5 | no | the whole request is refused |
 
 Options: `fake` takes `keep_gender` (default true) and `keep_region` (default false, phones only). `handle` takes `uses`
-(integer, default unlimited), `ttl_s` (seconds), `ask` (boolean), `tools` (list of tool names) and `sites` (list of
-registrable domains). Any other option is an error.
+(integer, default unlimited), `ttl_s` (seconds), `ask` (boolean), `tools` (list of tool names) and `sites` (list of hosts; an
+entry `*.example.com` also allows every subdomain of example.com; a wildcard over a public suffix such as `*.com` or
+`*.github.io` is an error). Any other option is an error. The starter profiles
+set `ask` for CARD, IBAN, ROUTING and BANK_ACCOUNT, so moving money details always needs the person's yes.
 
 Fallbacks: `fake` on a date means `shift`. `shift` on anything but a date means `fake`. A date that does not parse
 under `shift` gets `tag`. `fpe` on a non-digit type, or on fewer than 6 digits, means `fake`.
 
 **Only tighter.** An implementation must let code combine policies only in the stricter direction:
-`tighten(a, b)` takes, per type, the rule with the higher strength (ties keep `a`), and keeps only values both allow;
-applying overrides must fail if any override has a lower strength than the rule it replaces. There is no operation
+`tighten(a, b)` takes, per type, the rule with the higher strength (ties between different actions keep `a`), and
+keeps only values both allow. When both rules are `handle`, their limits combine: the lower `uses`, the shorter
+`ttl_s`, `ask` if either asks, and the intersection of `sites` and of `tools` (if both sides list sites, or both
+list tools, and nothing is common, the result is `drop`). Applying overrides must fail if any override has a lower
+strength than the rule it replaces, and an override with the same action keeps the old rule's limits the same way. There is no operation
 that takes a policy from model output.
 
 **Choosing a policy.** The app chooses. An implementation may offer a suggestion from the tool names an agent has
 (the reference `suggest_profile`), but the result is advice to the app, never something the model picks.
 
 Starter profiles ship in `data/profiles/`: `draft_reply`, `schedule`, `summarize`, `web_research`, `money_math`,
-`browse_and_fill`, `logs`, `training_data`, and three levels for products that want a simple switch: `secrets_only`,
-`contacts`, `strict`.
+`browse_and_fill`, `logs`, `training_data`, and three levels for products that want a simple switch the person
+controls: level 1 "Secrets" (`secrets_only`), level 2 "Contacts" (`contacts`) and level 3 "Everything" (`strict`).
+Every level hides secret types as handles; higher levels add contact details, then names, organisations and places.
 
 ## 6. Masking
 
@@ -175,9 +186,17 @@ For one input text:
 JSON values (tool results) are masked string by string; keys are left alone. A string under the key `arguments` that
 holds JSON is parsed, masked as JSON, and serialised compactly (no spaces, non-ASCII kept as is). Numbers with a
 fraction or beyond 2^53 may be written differently by different JSON libraries; vectors avoid them. Chat messages (OpenAI or Anthropic shape) are masked
-the same way, skipping structural keys (`role`, `type`, `id`, `name`, `tool_call_id`, `tool_use_id`, `call_id`,
-`model`, `image_url`, `source`, `data`, `media_type`, `signature`, `cache_control`, `status`, `finish_reason`,
-`stop_reason`, `object`, `index`, `format`, `detail`, `mime_type`). Notes for handles are appended to the message that
+the same way, leaving alone only values the protocol needs exactly as written: the keys `role`, `type`, `id`,
+`tool_call_id`, `tool_use_id`, `call_id`, `media_type`, `mime_type`, `mimeType`, `cache_control`, `toolCallId`,
+`toolName` and `mediaType` at any depth; `model` only at the top of a request body; inside a block whose `type` is
+`thinking`, `redacted_thinking` or `reasoning`, its `thinking`, `signature`, `encrypted_content` and (redacted) `data`,
+which are signed by the provider and hold only stand-ins because the model never saw real values; and real binary
+base64 (a `data` string in an object whose `type` is `base64`, or a `data:` URL with `;base64,`, but only if what
+follows really is base64). Base64 whose media type is text (`text/*`, JSON, XML, CSV, YAML) is decoded, masked and
+encoded again. Everything else is content, including `name`, `detail`,
+metadata and documents. Values left alone are still read by the egress check (section 11.1), so personal data placed
+under one of these keys stops the request rather than slipping out. When masking a JSON value that is data (a tool
+result), its keys are masked too. Notes for handles are appended to the message that
 mentions them: to a string `content` after a blank line, or as a final `{"type": "text"}` part, one line per note
 starting `Note: `. A note already present in the message is not added again.
 
@@ -227,7 +246,8 @@ Pools are in `data/pools.json`.
   written; rest (unit) through `shape(rest, "addr.unit")`. If the address does not parse: `<1 + below("addr.num", 999)>
   <street> St`.
 - **Domains** (used by EMAIL and URL). Lower-case the host, take its registrable domain (last two labels, or three if
-  the last two are in the two-part suffix list). If the vault has no fake for it, pick from `domain_words` (label
+  the last two are a public suffix, using the longest match in `public_suffixes` from the pools, a subset of the
+  Public Suffix List that includes shared hosting such as `github.io`). If the vault has no fake for it, pick from `domain_words` (label
   `domain`) and append `.example` (reserved by RFC 2606). Subdomain labels in the generic list stay, others go through
   `shape(label, "subdomain")`.
 - **EMAIL.** Split the local part into runs of letters, runs of digits and single other characters. If there are at
@@ -245,7 +265,8 @@ the local part (a fresh digit each try).
   Anything else: keep the first two digits if the number starts with `+`, the rest from `chars("phone.line", ...)`.
   The result is laid out with `fill` over the original.
 - **URL.** Scheme and port stay; the host is faked as a domain; in the rest, every alphanumeric run that follows `=`,
-  is 12 or more characters long, contains a digit, or is a known name part goes through `shape(run, "url")`.
+  is 12 or more characters long, contains a digit, or contains a known real name part of three or more letters
+  (so `/in/danareyes` is caught) goes through `shape(run, "url")`.
 - **IP_ADDRESS.** `i = below("ip", 762)` until free; `TEST_NETS[i // 254] + (i % 254 + 1)` with the RFC 5737 blocks
   `192.0.2.`, `198.51.100.`, `203.0.113.`.
 - **CARD.** From `test_cards` with the same length and not yet used, pick `below("card", count)`. If none is left:
@@ -331,12 +352,15 @@ On the last chunk, restore and emit everything.
 
 A span whose rule is `handle` becomes `{{TYPE_n}}` with binding data:
 
-- `sites`: the rule's `sites`, or else the registrable domain of the source (`source.site`, or the domain of
-  `source.sender`). The source is supplied by the app from facts it trusts (for email, a verified sender).
+- `sites`: the rule's `sites`, or else the exact host of the source (the host of `source.site`, or the domain of
+  `source.sender`), as WebOTP binds a code to one origin: a code mailed by acme.com fills on acme.com, not on
+  docs.acme.com, where anyone might host a form. A bare public suffix (github.io) is no binding. The source is supplied
+  by the app from facts it trusts (for email, a verified sender).
 - `tools`: the rule's `tools`, if any.
 - `uses_left`: the rule's `uses`, if any.
-- `expires_at`: for OTP, `now + ttl` where ttl comes from a phrase in the text ("expires in 10 minutes", "valid for 1
-  hour") or else the rule's `ttl_s`.
+- `expires_at`: for OTP, `now + ttl`. Text is untrusted, so a phrase in it ("expires in 10 minutes", "valid for 1
+  hour") may only shorten the rule's `ttl_s`, never lengthen it; with no `ttl_s`, a phrase alone counts for at most
+  3600 seconds.
 - `ask`: the rule's `ask`.
 - `description`: what the model is told (10.3).
 
@@ -345,9 +369,11 @@ A span whose rule is `handle` becomes `{{TYPE_n}}` with binding data:
 `resolve(args, sink)` restores a tool call's arguments right before the tool runs:
 
 1. Collect every handle in every string of the arguments. An unknown handle is refused (`unknown handle`).
-2. For each, refuse if expired (`expired`), out of uses (`already used`), the sink's tool is not in `tools` (`not
-   allowed for this tool`), or `sites` is non-empty and the sink's host is not one of them or a subdomain (`bound to a
-   different site`). If `ask` is set, or this tool and site pair is new for the handle and the app registered an
+2. For each, refuse if it has neither `sites` nor `tools` (`not bound to a site or tool`: fail closed, so a secret
+   read with no known source can never be sent anywhere), if expired (`expired`), out of uses (`already used`), the sink's tool is not in `tools` (`not
+   allowed for this tool`), or `sites` is non-empty and the sink's host is not one of them (exactly, or under a `*.`
+   entry) (`bound to a different site`). The sink's host is read the way a browser reads it: a backslash counts as a slash, and anything
+   before an `@` in the authority is ignored. If `ask` is set, or this tool and site pair is new for the handle and the app registered an
    approval callback, ask the app; no callback with `ask` set is a refusal (`needs the person's approval`), a "no" is
    `not approved`.
 3. Only if every handle passed: restore all strings, filling handles with real values. Then count one use per handle
@@ -373,6 +399,10 @@ CARD `a BRAND card ending NNNN` (Visa, Mastercard, American Express, Discover, e
 (IBAN, CC) ending XXXX`; BANK_ACCOUNT `a bank account number ending NNNN`; ROUTING `a bank routing number`; SSN `a
 social security number`; API_KEY `an API key`; anything else `a <type in lower case with spaces> value`.
 
+These descriptions tell the model a card's brand and last four digits and an IBAN's country and last four
+characters, which is what people expect to see and lets the model pick the right card. An app that wants to hide
+even that can use `drop` or `fpe` instead of `handle` for those types.
+
 ## 11. Egress check and receipts
 
 ### 11.1 The check
@@ -385,9 +415,14 @@ value.
 2. Search what is left for every real value of every entry whose action is not `keep`, in the known-value modes of
    4.2 (digit types with six or more digits by digits, shorter ones as written; IBAN in any case with and without
    spaces), plus every real name part of three or more letters that is not in `name_stopwords`.
-3. Any hit is a leak. A conforming sender does not send a request with a leak; it reports the types, never the values.
+3. Then run detection (section 4) again over everything a person could have written: for JSON, every key and every
+   string except the top-level `model`, signed reasoning and real binary base64; text sent as base64 is decoded and
+   read. A proxy also checks the query string. Any span
+   whose rule is not `keep` and that is not a stand-in is also a leak. This catches fields masking left alone.
+4. Any hit is a leak. A conforming sender does not send a request with a leak; it reports the types, never the values.
 
-This proves that no value **the vault knows** left. It cannot prove anything about values no detector found.
+This proves that no value **the vault knows**, and no value the detectors find in the outgoing bytes, left. It cannot
+prove anything about values no detector recognises.
 
 ### 11.2 Receipts
 
@@ -411,16 +446,23 @@ entries at the time; `check.found` must be 0 for a request that was sent.
 
 A log is a folder holding `receipts.jsonl` (one token per line) and, optionally, `payloads/NNNNNN.bin` (the exact
 bytes; these hold stand-ins, not real values). Verifying a log checks each signature, that `seq` counts 1, 2, 3...,
-the `prev` chain, `found` is 0, each stored payload's digest, and, given the vault, the check again on each payload.
+the `prev` chain, `found` is 0, each stored payload's digest (when a `payloads` folder exists, a missing payload is a
+problem, and so is a stored payload with no receipt), and, given the vault, the check again on each payload. A damaged
+line or a missing `receipts.jsonl` is reported, never fatal, and so are an empty log and, when a vault is given, a
+log with no payload left to re-check. Given the session id, every receipt must name it. A chain
+cannot show that receipts were cut off the end; a verifier that kept the number of requests sent or the digest of the
+last receipt (the proxy returns each receipt in a header) compares them to detect it.
 
 ## 12. Bindings
 
 ### 12.1 HTTP proxy
 
-A local proxy speaks the provider's own API, so an app only changes its base URL. It masks request bodies
-(OpenAI Chat Completions `messages`; OpenAI Responses `input` and `instructions`; Anthropic Messages `messages` and
-`system`), runs the egress check, records a receipt, forwards to the upstream, and restores responses, streamed or
-not. Streamed tool-call arguments are buffered until complete, then resolved. Request headers it reads (all
+A local proxy speaks the provider's own API (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages), so an
+app only changes its base URL. It masks the whole request body, not only the messages: system prompts, documents,
+message names, metadata and tool descriptions are content too; only the structural keys of section 6 and base64 data
+stay as they are. It masks twice, so a name learned late in the body (in a message) is also caught where it appeared
+earlier without a cue (in the system prompt). Then it runs the egress check, records a receipt, forwards to the
+upstream, and restores responses, streamed or not. Streamed tool-call arguments are buffered until complete, then resolved. Request headers it reads (all
 optional, set by the app, never forwarded upstream):
 
 - `x-opn-session`: session id; requests with the same id share a vault.
@@ -432,9 +474,14 @@ Response headers: `x-opn-receipt` (the receipt token) and `x-opn-unknown` (stand
 
 ### 12.2 MCP
 
-An MCP middleware sits between an MCP host and a server. Tool results (`content` text, `structuredContent`) are
+An MCP middleware sits between an MCP host and a server. Results of `resources/read` and `prompts/get` are masked
+like any text, and a resource address the host got from a masked listing is restored before the read goes to the
+server. Every masked result goes through the egress check of section 11.1; a result that fails it is replaced by an
+error ("Withheld: ..."). Tool results (`content` text, `structuredContent`) are
 masked before they reach the host and its model; tool arguments are resolved (section 10.2) before they reach the
-server, with the sink `{"tool": <tool name>, "site": <the server's configured site, if any>}`. A refused handle
+server, with the sink `{"tool": <tool name>, "site": <the site configured for that tool, if any>}`. Sites are set
+per tool: a site for a whole server would let a handle bound to it be filled into any of its tools, including ones
+that send messages. A refused handle
 becomes a tool error whose text is the refusal reason. Handle notes are appended to the tool result as an extra text
 item.
 

@@ -26,6 +26,7 @@ export interface Pools {
   webmail_domains: string[];
   test_cards: string[];
   advertising_ssns: string[];
+  public_suffixes: string[];
 }
 
 export interface PatternSpec {

@@ -31,7 +31,7 @@
   },
   {
    "type": "EMAIL",
-   "pattern": "(?<![A-Za-z0-9_])([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})(?![A-Za-z0-9_])",
+   "pattern": "(?<![A-Za-z0-9_])([A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){0,8}\\.[A-Za-z]{2,24})(?![A-Za-z0-9_])",
    "group": 1,
    "flags": "",
    "check": null,
@@ -130,7 +130,7 @@
   },
   {
    "type": "PASSWORD",
-   "pattern": "(?<![A-Za-z0-9_])(?:password|passwd|pwd|passphrase)(?: is|:| =)[ \\t]*(?!https?://)([^ \\t\\r\\n\\f\\v]{4,64})",
+   "pattern": "(?<![A-Za-z0-9_])(?:password|passwd|pwd|passphrase)(?: is:?|:| =)[ \\t]*(?!https?://)([^ \\t\\r\\n\\f\\v]{4,64})",
    "group": 1,
    "flags": "i",
    "check": null,
@@ -238,7 +238,7 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?:^|\\n)[ \\t]*(?:[Hh]i|[Hh]ello|[Hh]ey|[Dd]ear|[Gg]ood (?:morning|afternoon|evening))[ ,]+([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n:]|$)",
+   "pattern": "(?:^|\\n)[ \\t]*(?:[Hh]i|[Hh]ello|[Hh]ey|[Dd]ear|[Gg]ood (?:morning|afternoon|evening))[ ,]+([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n:]|$)",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -247,7 +247,7 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?:Mr|Mrs|Ms|Mx|Dr|Prof)\\.? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?![A-Za-z0-9_])",
+   "pattern": "(?:Mr|Mrs|Ms|Mx|Dr|Prof)\\.? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?![A-Za-z0-9_])",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -256,16 +256,16 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?:^|\\n)(?:From|To|Cc|Reply-To): *([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2}) *<",
+   "pattern": "(?:^|\\n)(?:From|To|Cc|Bcc|Reply-To): *([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2}) *(?=<|,|\\n|$)",
    "group": 1,
    "flags": "",
    "check": "name",
    "priority": 40,
-   "note": ""
+   "note": "mail headers, with or without the address"
   },
   {
    "type": "PERSON",
-   "pattern": "(?:^|\\n)[ \\t]*(?:Thanks|Thank you|Best|Regards|Best regards|Kind regards|Cheers|Sincerely|Warmly),?[ \\t]*\\n[ \\t]*([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})[ \\t]*(?=\\n|$)",
+   "pattern": "(?:^|\\n)[ \\t]*(?:Thanks|Thank you|Best|Regards|Best regards|Kind regards|Cheers|Sincerely|Warmly),?[ \\t]*\\n[ \\t]*([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})[ \\t]*(?=\\n|$)",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -274,7 +274,7 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?:^|\\n|[.!?] )[ \\t]*(?:[Tt]hanks|[Tt]hank you|[Cc]heers),? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n]| for|$)",
+   "pattern": "(?:^|\\n|[.!?] )[ \\t]*(?:[Tt]hanks|[Tt]hank you|[Cc]heers),? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n]| for|$)",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -283,7 +283,7 @@
   },
   {
    "type": "PERSON",
-   "pattern": "\"(?:name|full_name|fullName|display_name|displayName|contact|contact_name|customer|customer_name|recipient|sender|requester|approver|owner|assignee|author|attendee|patient|client)\" ?: ?\"([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})\"",
+   "pattern": "\"(?:name|full_name|fullName|display_name|displayName|contact|contact_name|customer|customer_name|recipient|sender|requester|approver|owner|assignee|author|attendee|patient|client)\" ?: ?\"([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})\"",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -292,7 +292,7 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?<![A-Za-z0-9_])(?:with|meet|meeting|ask|call|email|cc|tell|invite|from|for|and|by|pay|paid|text|message|ping|remind|introduce|contact|thank|reply to|send to|sent to|forward to|write to|addressed to) ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?![A-Za-z0-9_])",
+   "pattern": "(?<![A-Za-z0-9_])(?:with|meet|meeting|ask|call|email|cc|tell|invite|from|for|and|by|pay|paid|text|message|ping|remind|introduce|contact|thank|reply to|send to|sent to|forward to|write to|addressed to) ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?![A-Za-z0-9_])",
    "group": 1,
    "flags": "",
    "check": "name",
@@ -301,7 +301,16 @@
   },
   {
    "type": "PERSON",
-   "pattern": "(?:^|[ (])to ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?=,)",
+   "pattern": "(?<![A-Za-z0-9_])(?:[Pp]atient|[Cc]lient|[Cc]ustomer|[Ee]mployee|[Tt]enant|[Aa]pplicant|[Cc]andidate|[Gg]uest|[Mm]ember|[Rr]esident|[Oo]wner)(?: name)?:? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 39,
+   "note": "a role word before a full name, as in records and forms"
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|[ (])to ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]*(?:'[A-ZÀ-ÖØ-Þ])?[a-zß-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?=,)",
    "group": 1,
    "flags": "",
    "check": "name",

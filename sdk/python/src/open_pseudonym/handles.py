@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-from .fakes import registrable
+from .fakes import is_public_suffix
 from .types import digits_of
 
 HANDLE = re.compile(r"\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}")
@@ -40,11 +40,16 @@ class Source:
     site: str | None = None
 
     def bound_site(self) -> str | None:
+        """The exact host a secret from this source may be filled on, the way WebOTP binds a code to one origin.
+        A code mailed by no-reply@acme.com fills on acme.com, not on docs.acme.com, where anyone may host a form."""
         if self.site:
-            return registrable(host_of(self.site))
-        if self.sender and "@" in self.sender:
-            return registrable(self.sender.rpartition("@")[2])
-        return None
+            host = host_of(self.site)
+        elif self.sender and "@" in self.sender:
+            host = self.sender.rpartition("@")[2].lower().rstrip(".")
+        else:
+            return None
+        # a bare shared suffix (github.io) belongs to everyone under it, so it is no binding at all
+        return None if not host or is_public_suffix(host) else host
 
 
 @dataclass(frozen=True)
@@ -59,16 +64,30 @@ class Sink:
 
 
 def host_of(site: str) -> str:
+    """The host a browser would go to. Browsers read a backslash like a slash in web URLs, so we do too:
+    https://evil.example\\@acme.com/ goes to evil.example, never to acme.com."""
+    site = site.strip().replace("\\", "/")
     if "://" in site:
-        return (urlsplit(site).hostname or "").lower()
-    return site.lower().split("/")[0].split(":")[0]
+        try:
+            return (urlsplit(site).hostname or "").lower()
+        except ValueError:  # a malformed address goes nowhere
+            return ""
+    return site.lower().split("/")[0].split("@")[-1].split(":")[0]
 
 
 def site_matches(site: str | None, allowed: list[str]) -> bool:
+    """Exact host match. An entry written as *.acme.com also allows every subdomain of acme.com (and acme.com);
+    a policy says that on purpose, it is never inferred."""
     if not site:
         return False
     h = host_of(site).rstrip(".")
-    return any(h == a or h.endswith("." + a) for a in (x.lower() for x in allowed))
+    for a in (x.lower().rstrip(".") for x in allowed):
+        if a.startswith("*."):
+            if h == a[2:] or h.endswith(a[1:]):
+                return True
+        elif h == a:
+            return True
+    return False
 
 
 _EXPIRY = re.compile(r"(?:expires?|valid|good) (?:in|for) ([0-9]{1,3}) ?(min|mins|minute|minutes|hour|hours|hr|hrs)",
@@ -121,11 +140,6 @@ def describe(type_: str, real: str, site: str | None, expires_at: int | None) ->
     return f"a {type_.lower().replace('_', ' ')} value"
 
 
-def label(type_: str, meta: dict) -> str:
-    """How a handle shows up when the answer is restored for display without revealing the secret."""
-    return f"[{meta['description']}]"
-
-
 def note(handle: str, meta: dict) -> str:
     return (f"{handle} is {meta['description']}. Write {handle} exactly where the value is needed; "
             "the real value is filled in outside the model.")
@@ -133,7 +147,10 @@ def note(handle: str, meta: dict) -> str:
 
 def check(handle: str, meta: dict, sink: Sink, now: int) -> None:
     """Raise HandleRefused unless the handle may be filled into this sink right now."""
-    if meta.get("expires_at") is not None and now > meta["expires_at"]:
+    if not meta.get("sites") and not meta.get("tools"):
+        # fail closed: a handle that nobody bound to a site or a tool could otherwise go anywhere
+        raise HandleRefused(handle, "not bound to a site or tool")
+    if meta.get("expires_at") is not None and now >= meta["expires_at"]:  # gone at its expiry second
         raise HandleRefused(handle, "expired")
     if meta.get("uses_left") is not None and meta["uses_left"] <= 0:
         raise HandleRefused(handle, "already used")

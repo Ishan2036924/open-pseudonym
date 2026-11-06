@@ -15,7 +15,7 @@
       "sender": "no-reply@acme.com"
      },
      "expect": {
-      "text": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+      "text": "From: Avery Abara <avery.abara@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nAvery",
       "notes": [
        "{{OTP_1}} is a 6-digit one-time code from acme.com, valid until 00:10 UTC. Write {{OTP_1}} exactly where the value is needed; the real value is filled in outside the model."
       ]
@@ -23,7 +23,7 @@
     },
     {
      "op": "restore",
-     "text": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+     "text": "From: Avery Abara <avery.abara@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nAvery",
      "reveal": true,
      "expect": "From: Dana Reyes <dana.reyes@gmail.com>\nHi Sam,\n\nCan we move Thursday's call to March 12, 2026? Call me at (617) 555-0142.\nYour Acme verification code is 482913. It expires in 10 minutes.\n\nThanks,\nDana"
     },
@@ -49,12 +49,25 @@
     {
      "op": "resolve",
      "args": {
-      "field": "#otp",
       "text": "{{OTP_1}}"
      },
      "sink": {
       "tool": "type",
       "site": "https://login.acme.com"
+     },
+     "expect": {
+      "refused": "bound to a different site"
+     }
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "field": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
      },
      "expect": {
       "args": {
@@ -70,7 +83,7 @@
      },
      "sink": {
       "tool": "type",
-      "site": "https://login.acme.com"
+      "site": "https://acme.com/login"
      },
      "expect": {
       "refused": "already used"
@@ -78,12 +91,12 @@
     },
     {
      "op": "egress",
-     "payload": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+     "payload": "From: Avery Abara <avery.abara@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nAvery",
      "expect": []
     },
     {
      "op": "egress",
-     "payload": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis Dana",
+     "payload": "From: Avery Abara <avery.abara@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nAvery Dana",
      "expect": [
       "PERSON"
      ]
@@ -109,7 +122,7 @@
      "op": "mask",
      "text": "Priya said 3/26/2026 works; ping priya.raman@acme.co.uk",
      "expect": {
-      "text": "Lina said 3/26/2026 works; ping lina.gallagher@quarryhill.example",
+      "text": "Selin said 3/26/2026 works; ping selin.abara@quarryhill.example",
       "notes": []
      }
     }
@@ -126,7 +139,7 @@
      "op": "mask",
      "text": "Hi Omar,\nI will meet Omar Haddad and Lena Novak on 2026-03-12 (Thu). Card 4242 4242 4242 4242, IBAN GB82 WEST 1234 5698 7654 32, SSN 123-45-6789, server 10.0.12.7, https://docs.acme.com/r/9921xq?u=omar, Northwind Traders Inc., $1,234.50",
      "expect": {
-      "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+      "text": "Hi Rafael,\nI will meet Rafael Abara and Selin Duval on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
       "notes": [
        "{{CARD_1}} is a Visa card ending 4242. Write {{CARD_1}} exactly where the value is needed; the real value is filled in outside the model.",
        "{{IBAN_1}} is a bank account (IBAN, GB) ending 5432. Write {{IBAN_1}} exactly where the value is needed; the real value is filled in outside the model.",
@@ -136,13 +149,13 @@
     },
     {
      "op": "restore",
-     "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+     "text": "Hi Rafael,\nI will meet Rafael Abara and Selin Duval on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
      "reveal": true,
      "expect": "Hi Omar,\nI will meet Omar Haddad and Lena Novak on 2026-03-12 (Thu). Card 4242 4242 4242 4242, IBAN GB82 WEST 1234 5698 7654 32, SSN 123-45-6789, server 10.0.12.7, https://docs.acme.com/r/9921xq?u=omar, Northwind Traders Inc., $1,234.50"
     },
     {
      "op": "stream",
-     "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+     "text": "Hi Rafael,\nI will meet Rafael Abara and Selin Duval on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
      "chunks": [
       1,
       2,
@@ -160,7 +173,7 @@
      "op": "mask",
      "text": "OMAR HADDAD replied; Lena too.",
      "expect": {
-      "text": "BRUNO GALLAGHER replied; Lina too.",
+      "text": "RAFAEL ABARA replied; Selin too.",
       "notes": []
      }
     }
@@ -177,7 +190,7 @@
      "op": "mask",
      "text": "Patient contact: Elena Ortiz, elena.ortiz@example.org, +1 (415) 555-0199.",
      "expect": {
-      "text": "Patient contact: Lina Gallagher, lina.gallagher@quarryhill.example, +1 (206) 555-0112.",
+      "text": "Patient contact: Selin Abara, selin.abara@quarryhill.example, +1 (206) 555-0112.",
       "notes": []
      }
     },
@@ -185,7 +198,7 @@
      "op": "mask",
      "text": "Follow-up for Elena Ortiz on 2026-04-02; billed $480.00.",
      "expect": {
-      "text": "Follow-up for Lina Gallagher on 2026-07-23; billed $480.00.",
+      "text": "Follow-up for Selin Abara on 2026-07-23; billed $480.00.",
       "notes": []
      }
     },
@@ -214,7 +227,7 @@
      "op": "mask",
      "text": "card 4242 4242 4242 4242 for May Chen",
      "expect": {
-      "text": "card [CARD removed] for Ellis Gallagher",
+      "text": "card [CARD removed] for Sam Abara",
       "notes": []
      }
     },
@@ -234,7 +247,7 @@
     },
     {
      "op": "egress",
-     "payload": "see you May 5",
+     "payload": "see you in May",
      "expect": []
     },
     {

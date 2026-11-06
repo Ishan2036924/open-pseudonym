@@ -1,6 +1,7 @@
 """Masking: stand-ins are consistent, keep their type and shape, and come from reserved ranges."""
 
 import datetime as dt
+import json
 import re
 
 import pytest
@@ -81,10 +82,20 @@ def test_money_scales_consistently(make_session):
     assert amounts[0] != 120000
 
 
-def test_masking_twice_changes_nothing(make_session):
-    s = make_session()
+def test_masking_twice_changes_nothing_when_the_app_says_so(make_session):
+    s = make_session(masked_input=True)
     once = s.mask(EMAIL).text
     assert s.mask(once).text == once
+
+
+def test_a_real_name_equal_to_an_earlier_fake_is_still_masked(make_session):
+    """Critic finding: a real 'Ellis' after Dana became 'Ellis' used to reach the model as is."""
+    s = make_session()
+    fake = s.mask("Hi Dana,\nok").text.split("Hi ")[1].split(",")[0]
+    real_text = f"Hi {fake},\nthis is a different person who really has that name"
+    m = s.mask(real_text)
+    assert not m.text.startswith(f"Hi {fake},")  # masked like any other name
+    assert s.restore(m.text) == real_text
 
 
 def test_same_seed_same_output(make_session):
@@ -157,3 +168,49 @@ def test_a_fake_never_equals_the_real_value():
         for r in m.replacements:
             real = s.vault.by_id(r.entry_id).surfaces[r.stand_in]
             assert r.stand_in.lower() != real.lower(), (i, r.type, real)
+
+
+def test_name_slugs_in_links_are_hidden(make_session):
+    """Critic finding: /in/danareyes kept the name."""
+    s = make_session("strict")
+    m = s.mask("I will meet Dana Reyes, see https://social.example.com/in/danareyes")
+    assert "danareyes" not in m.text
+
+
+def test_lowercase_names_are_caught_once_known(make_session):
+    """Critic finding: 'dana reyes' in lower case passed both masking and the egress check."""
+    s = make_session("strict")
+    s.mask("I will meet Dana Reyes")
+    assert "dana reyes" not in s.mask("dana reyes called back").text
+    assert s.check_egress("then dana reyes said hi")
+
+
+def test_known_names_match_across_any_whitespace(make_session):
+    """Critic finding: 'dana  reyes' and 'dana\\nreyes' passed masking and the egress check."""
+    s = make_session("strict")
+    s.mask("I will meet Dana Reyes")
+    for text in ["dana  reyes called", "dana\nreyes called", "dana reyes called"]:
+        assert "reyes" not in s.mask(text).text.lower(), repr(text)
+        assert s.check_egress(text), repr(text)
+
+
+def test_keys_of_tool_results_are_masked(make_session):
+    s = make_session("strict")
+    masked, _ = s.mask_json({"dana.reyes@gmail.com": {"name": "Dana Reyes"}})
+    assert "dana" not in json.dumps(masked).lower()
+
+
+def test_long_input_stays_fast(make_session):
+    import time
+
+    s = make_session("strict")
+    text = "a." * 50_000 + " mail dana@acme.com"
+    t0 = time.perf_counter()
+    s.mask(text)
+    assert time.perf_counter() - t0 < 3.0  # was about 12 s for 100 KB before the email pattern was bounded
+
+
+def test_a_known_contacts_name_parts_are_caught_alone(make_session):
+    s = make_session("strict", known={"PERSON": ["Dana Reyes"]})
+    out = s.mask("Dana called, and later Reyes, Dana wrote back").text
+    assert "Dana" not in out and "Reyes" not in out

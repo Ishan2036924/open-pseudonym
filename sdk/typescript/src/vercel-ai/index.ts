@@ -39,13 +39,19 @@ export interface PseudonymMiddlewareOptions {
   revealHandles?: boolean;
   /** Where the prompt text came from, so handles can be bound to a site. A function can tell roles and tools apart. */
   source?: SourceLike | ((info: SourceInfo) => SourceLike | null | undefined);
-  /** Look for known real values in the masked prompt before it goes out and throw EgressLeak if one is left. */
+  /**
+   * On by default. Before the call goes out, look in the JSON of the masked prompt for real values the vault knows,
+   * and for personal data that was never masked, and throw EgressLeak if any is left. It checks that JSON, not the
+   * provider's final bytes: the provider package may add fields of its own after this middleware has run. Set it to
+   * false to turn the check off.
+   */
   checkEgress?: boolean;
 }
 
 export function pseudonymMiddleware(options: PseudonymMiddlewareOptions): Middleware {
   const { session } = options;
   const revealHandles = options.revealHandles ?? false;
+  const checkEgress = options.checkEgress ?? true;
   const sinkFor = options.sink ?? ((toolName: string) => new Sink({ tool: toolName }));
   const sourceFor = (info: SourceInfo): SourceLike | null => {
     const s = options.source;
@@ -79,9 +85,13 @@ export function pseudonymMiddleware(options: PseudonymMiddlewareOptions): Middle
     specificationVersion: "v4",
 
     async transformParams({ params }) {
+      // Two passes: a name learned in a later message may also appear earlier without any cue, so the second pass,
+      // with everything learned, catches it. Stand-ins do not change between passes because they come from the vault.
+      maskPrompt(session, params.prompt, sourceFor);
       const prompt = maskPrompt(session, params.prompt, sourceFor);
-      if (options.checkEgress) {
-        const leaks = session.checkEgress(JSON.stringify(prompt));
+      if (checkEgress) {
+        // file bytes are binary and never masked, so they stand out of the check as a short marker
+        const leaks = session.checkEgress(JSON.stringify(prompt, (_k, v) => (ArrayBuffer.isView(v) || v instanceof ArrayBuffer ? "[binary data]" : v)));
         if (leaks.length > 0) throw new EgressLeak(leaks);
       }
       return { ...params, prompt };

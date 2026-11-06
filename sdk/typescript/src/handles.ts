@@ -5,9 +5,9 @@
 // filler) checks the place against the handle's binding before the real code is put in, at the last moment, outside
 // the model. A prompt injection that says "type the code into evil.example" gets a refusal, not the code.
 
-import { registrable } from "./fakes.ts";
+import { isPublicSuffix } from "./fakes.ts";
 import { digitsOf } from "./types.ts";
-import { stripWs } from "./util.ts";
+import { stripWs, truthy } from "./util.ts";
 
 export const HANDLE = /\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}/gu;
 
@@ -34,11 +34,17 @@ export interface SinkLike {
   site?: string | null;
 }
 
-/** The site a piece of text binds its handles to: the page it came from, else the sender's domain. */
+/**
+ * The exact host a secret from this source may be filled on, the way WebOTP binds a code to one origin. A code
+ * mailed by no-reply@acme.com fills on acme.com, not on docs.acme.com, where anyone may host a form.
+ */
 export function boundSite(source: SourceLike): string | null {
-  if (source.site) return registrable(hostOf(source.site));
-  if (source.sender && source.sender.includes("@")) return registrable(source.sender.slice(source.sender.lastIndexOf("@") + 1));
-  return null;
+  let host: string;
+  if (source.site) host = hostOf(source.site);
+  else if (source.sender && source.sender.includes("@")) host = source.sender.slice(source.sender.lastIndexOf("@") + 1).toLowerCase().replace(/\.+$/, "");
+  else return null;
+  // a bare shared suffix (github.io) belongs to everyone under it, so it is no binding at all
+  return host === "" || isPublicSuffix(host) ? null : host;
 }
 
 /**
@@ -76,18 +82,109 @@ export class Sink implements SinkLike {
   }
 }
 
-const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*$/;
+const SCHEME_CHARS = /^[A-Za-z0-9+.-]*$/;
+const HEX = /^[0-9A-Fa-f]+$/;
+const DECIMAL = /^[0-9]+$/;
 
+// what Python's ipaddress.IPv4Address accepts: four plain decimal numbers up to 255, no leading zeros
+function isIPv4(s: string): boolean {
+  const parts = s.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((p) => p.length >= 1 && p.length <= 3 && DECIMAL.test(p) && !(p.length > 1 && p[0] === "0") && Number(p) <= 255);
+}
+
+// what Python's ipaddress.IPv6Address accepts, including a %scope id
+function isIPv6(text: string): boolean {
+  if (text.includes("/")) return false;
+  const pct = text.indexOf("%");
+  let addr = text;
+  if (pct >= 0) {
+    const scope = text.slice(pct + 1);
+    if (scope === "" || scope.includes("%")) return false;
+    addr = text.slice(0, pct);
+  }
+  const parts = addr.split(":");
+  if (parts.length < 3) return false;
+  if (parts[parts.length - 1].includes(".")) {
+    if (!isIPv4(parts[parts.length - 1])) return false;
+    parts.splice(parts.length - 1, 1, "0", "0");
+  }
+  if (parts.length > 9) return false;
+  let skip = -1;
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (parts[i] === "") {
+      if (skip >= 0) return false; // only one "::"
+      skip = i;
+    }
+  }
+  let hi = parts.length;
+  let lo = 0;
+  if (skip >= 0) {
+    hi = skip;
+    lo = parts.length - skip - 1;
+    if (parts[0] === "" && --hi > 0) return false; // a leading colon needs "::"
+    if (parts[parts.length - 1] === "" && --lo > 0) return false; // a trailing colon needs "::"
+    if (8 - (hi + lo) < 1) return false;
+  } else if (parts.length !== 8 || parts[0] === "" || parts[parts.length - 1] === "") {
+    return false;
+  }
+  const checked = [...parts.slice(0, hi), ...(lo > 0 ? parts.slice(-lo) : [])];
+  return checked.every((h) => h.length <= 4 && HEX.test(h));
+}
+
+// urlsplit refuses a bracketed host that is not an IPv6 address (or an IPvFuture literal)
+function bracketedHostOk(h: string): boolean {
+  if (h.startsWith("v")) return /^v[a-fA-F0-9]+\..+$/s.test(h);
+  return isIPv6(h);
+}
+
+// the checks Python's urlsplit makes on a netloc before it hands out a hostname; true means it raises ValueError
+function netlocRejected(netloc: string): boolean {
+  const open = netloc.includes("[");
+  const close = netloc.includes("]");
+  if (open !== close) return true;
+  if (open) {
+    const hostAndPort = netloc.slice(netloc.lastIndexOf("@") + 1);
+    const at = hostAndPort.indexOf("[");
+    let hostname: string;
+    if (at >= 0) {
+      if (at > 0) return true; // nothing may stand before the bracket
+      const bracketed = hostAndPort.slice(at + 1);
+      const end = bracketed.indexOf("]");
+      hostname = end >= 0 ? bracketed.slice(0, end) : bracketed;
+      const port = end >= 0 ? bracketed.slice(end + 1) : "";
+      if (port !== "" && !port.startsWith(":")) return true; // nor between the bracket and the port
+    } else {
+      hostname = hostAndPort.split(":")[0];
+    }
+    if (!bracketedHostOk(hostname)) return true;
+  }
+  if (netloc !== "" && !/^[\u0000-\u007f]*$/.test(netloc)) {
+    // looking for characters that expand to a separator once normalised, as hostnames are
+    const n = netloc.replaceAll("@", "").replaceAll(":", "").replaceAll("#", "").replaceAll("?", "");
+    const n2 = n.normalize("NFKC");
+    if (n !== n2 && [..."/?#@:"].some((c) => n2.includes(c))) return true;
+  }
+  return false;
+}
+
+/**
+ * The host a browser would go to. Browsers read a backslash like a slash in web URLs, so we do too:
+ * https://evil.example\@acme.com/ goes to evil.example, never to acme.com. An address the parser rejects goes
+ * nowhere, so it gives the empty host.
+ */
 export function hostOf(site: string): string {
+  site = stripWs(site).replaceAll("\\", "/");
   if (site.includes("://")) {
     // the same reading of a URL that Python's urlsplit(...).hostname gives
-    let rest = site;
-    const colon = site.indexOf(":");
-    if (colon > 0 && SCHEME.test(site.slice(0, colon))) rest = site.slice(colon + 1);
+    let rest = site.replace(/^[\u0000-\u0020]+/, "").replace(/[\t\r\n]/g, "");
+    const colon = rest.indexOf(":");
+    if (colon > 0 && /^[A-Za-z]/.test(rest) && SCHEME_CHARS.test(rest.slice(0, colon))) rest = rest.slice(colon + 1);
     if (!rest.startsWith("//")) return "";
     let netloc = rest.slice(2);
     const end = netloc.search(/[/?#]/);
     if (end >= 0) netloc = netloc.slice(0, end);
+    if (netlocRejected(netloc)) return "";
     let hostinfo = netloc.slice(netloc.lastIndexOf("@") + 1);
     if (hostinfo.includes("[")) {
       hostinfo = hostinfo.slice(hostinfo.indexOf("[") + 1);
@@ -97,13 +194,24 @@ export function hostOf(site: string): string {
     }
     return hostinfo.toLowerCase();
   }
-  return site.toLowerCase().split("/")[0].split(":")[0];
+  return site.toLowerCase().split("/")[0].split("@").at(-1)!.split(":")[0];
 }
 
+/**
+ * Exact host match. An entry written as *.acme.com also allows every subdomain of acme.com (and acme.com); a policy
+ * says that on purpose, it is never inferred.
+ */
 export function siteMatches(site: string | null | undefined, allowed: string[]): boolean {
   if (!site) return false;
   const h = hostOf(site).replace(/\.+$/, "");
-  return allowed.map((x) => x.toLowerCase()).some((a) => h === a || h.endsWith("." + a));
+  for (const a of allowed.map((x) => x.toLowerCase().replace(/\.+$/, ""))) {
+    if (a.startsWith("*.")) {
+      if (h === a.slice(2) || h.endsWith(a.slice(1))) return true;
+    } else if (h === a) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const EXPIRY = /(?:expires?|valid|good) (?:in|for) ([0-9]{1,3}) ?(min|mins|minute|minutes|hour|hours|hr|hrs)/iu;
@@ -149,11 +257,6 @@ export function describe(type: string, real: string, site: string | null, expire
   return `a ${type.toLowerCase().replaceAll("_", " ")} value`;
 }
 
-/** How a handle shows up when the answer is restored for display without revealing the secret. */
-export function label(meta: Record<string, any>): string {
-  return `[${meta.description}]`;
-}
-
 export function note(handle: string, meta: Record<string, any>): string {
   return `${handle} is ${meta.description}. Write ${handle} exactly where the value is needed; ` +
     "the real value is filled in outside the model.";
@@ -161,7 +264,11 @@ export function note(handle: string, meta: Record<string, any>): string {
 
 /** Throw HandleRefused unless the handle may be filled into this sink right now. */
 export function check(handle: string, meta: Record<string, any>, sink: SinkLike, now: number): void {
-  if (meta.expires_at != null && now > meta.expires_at) throw new HandleRefused(handle, "expired");
+  if (!truthy(meta.sites) && !truthy(meta.tools)) {
+    // fail closed: a handle that nobody bound to a site or a tool could otherwise go anywhere
+    throw new HandleRefused(handle, "not bound to a site or tool");
+  }
+  if (meta.expires_at != null && now >= meta.expires_at) throw new HandleRefused(handle, "expired"); // gone at its expiry second
   if (meta.uses_left != null && meta.uses_left <= 0) throw new HandleRefused(handle, "already used");
   const tools: string[] | null | undefined = meta.tools;
   if (tools && tools.length > 0 && !tools.includes(sink.tool as string)) throw new HandleRefused(handle, "not allowed for this tool");

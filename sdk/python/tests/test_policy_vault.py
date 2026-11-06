@@ -66,3 +66,40 @@ def test_vault_save_load(tmp_path):
     assert s2.mask("Dana Reyes again").text == s.mask("Dana Reyes again").text
     with pytest.raises(VaultError):
         Vault.load(path, os.urandom(32))
+
+
+def test_tightening_keeps_every_handle_limit():
+    """Critic finding: same-strength overrides used to drop uses, ttl and ask."""
+    p = load_profile("strict").with_rules({"OTP": {"action": "handle"}, "SSN": {"action": "handle"}})
+    assert p.rule_for("OTP").options == {"uses": 1, "ttl_s": 600}
+    assert p.rule_for("SSN").options == {"ask": True}
+    a = Policy.from_dict({"opn": "0.1", "type": "policy", "id": "a",
+                          "rules": {"PASSWORD": {"action": "handle", "uses": 1, "sites": ["acme.com"], "ask": True}}})
+    b = Policy.from_dict({"opn": "0.1", "type": "policy", "id": "b",
+                          "rules": {"PASSWORD": {"action": "handle", "uses": 5, "sites": ["acme.com", "x.example"]}}})
+    for t in (a.tighten(b), b.tighten(a)):
+        assert t.rule_for("PASSWORD").options == {"uses": 1, "ask": True, "sites": ["acme.com"]}
+    c = Policy.from_dict({"opn": "0.1", "type": "policy", "id": "c",
+                          "rules": {"PASSWORD": {"action": "handle", "sites": ["other.example"]}}})
+    assert a.tighten(c).rule_for("PASSWORD").action == "drop"  # no site both allow: nothing may be filled
+
+
+def test_levels_always_hide_secrets_and_add_more_as_they_go_up():
+    from open_pseudonym import LEVELS, load_level
+    from open_pseudonym.types import SECRET_TYPES
+
+    hidden = []
+    for n in sorted(LEVELS):
+        p = load_level(n)
+        assert all(p.rule_for(t).action == "handle" for t in SECRET_TYPES), n  # secrets hidden at every level
+        hidden.append({t for t in ("PERSON", "EMAIL", "PHONE", "ADDRESS", "ORG") if p.rule_for(t).action != "keep"})
+    assert hidden[0] == set() and hidden[1] == {"EMAIL", "PHONE", "ADDRESS"} and hidden[2] >= hidden[1] | {"PERSON"}
+    with pytest.raises(PolicyError):
+        load_level(4)
+
+
+def test_a_wildcard_over_a_public_suffix_is_refused():
+    for site in ["*.com", "*.github.io", "*.co.uk"]:
+        with pytest.raises(PolicyError, match="public suffix"):
+            Policy.from_dict({"opn": "0.1", "type": "policy", "id": "x",
+                              "rules": {"OTP": {"action": "handle", "sites": [site]}}})

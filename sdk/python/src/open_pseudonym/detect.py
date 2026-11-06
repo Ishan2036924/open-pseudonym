@@ -119,11 +119,11 @@ class KnownDetector:
         case_alts = []
         for type_, text in by_mode["case"]:
             for variant in {text, text.upper()}:
-                self._lookup[("case", variant)] = type_
+                self._lookup[("case", _squash(variant))] = type_
                 case_alts.append(variant)
         nocase_alts = []
         for type_, text in by_mode["nocase"]:
-            self._lookup[("nocase", text.lower())] = type_
+            self._lookup[("nocase", _squash(text).lower())] = type_
             nocase_alts.append(text)
         if case_alts:
             self._regexes.append((re.compile(NB + "(" + _alternation(case_alts) + ")" + NA), "case"))
@@ -131,29 +131,45 @@ class KnownDetector:
             self._regexes.append(
                 (re.compile(NB + "(" + _alternation(nocase_alts) + ")" + NA, re.IGNORECASE), "nocase")
             )
-        self._digit_forms = []
+        # all known numbers in one regex; a match is mapped back to its type by its digits
+        self._digit_types: dict[str, str] = {}
         for type_, digits in by_mode["digits"]:
             if len(digits) >= 6:
-                pattern = "(?<![0-9])[(+]?" + "[ .()+-]{0,2}".join(digits) + "(?![0-9])"
-                self._digit_forms.append((re.compile(pattern), type_))
+                self._digit_types.setdefault(digits, type_)
+        self._digit_re = None
+        if self._digit_types:
+            alts = sorted(self._digit_types, key=lambda d: (-len(d), d))
+            body = "|".join("[ .()+-]{0,2}".join(d) for d in alts)
+            self._digit_re = re.compile("(?<![0-9])[(+]?(?:" + body + ")(?![0-9])")
 
     def detect(self, text: str) -> list[Span]:
         out = []
         for regex, mode in self._regexes:
             for m in regex.finditer(text):
-                key = m[1] if mode == "case" else m[1].lower()
+                key = _squash(m[1]) if mode == "case" else _squash(m[1]).lower()
                 type_ = self._lookup.get((mode, key))
                 if type_:
                     out.append(Span(m.start(1), m.end(1), type_, m[1], "known", self.PRIORITY))
-        for regex, type_ in self._digit_forms:
-            for m in regex.finditer(text):
-                out.append(Span(m.start(), m.end(), type_, m[0], "known", self.PRIORITY))
+        if self._digit_re is not None:
+            for m in self._digit_re.finditer(text):
+                type_ = self._digit_types.get("".join(c for c in m[0] if "0" <= c <= "9"))
+                if type_:
+                    out.append(Span(m.start(), m.end(), type_, m[0], "known", self.PRIORITY))
         return out
 
 
+_WS = "[ \\t\\r\\n\\u00a0]+"
+
+
+def _squash(text: str) -> str:
+    """Runs of whitespace as one space, so "Dana  Reyes" and "Dana\\nReyes" look up the same entry."""
+    return " ".join(text.replace("\u00a0", " ").split())
+
+
 def _alternation(alts: list[str]) -> str:
-    # longest first, so "Dana Reyes" wins over "Dana"
-    return "|".join(re.escape(a) for a in sorted(set(alts), key=lambda s: (-len(s), s)))
+    # longest first, so "Dana Reyes" wins over "Dana"; words may be split by any run of whitespace
+    words = sorted({_squash(a) for a in alts}, key=lambda s: (-len(s), s))
+    return "|".join(_WS.join(re.escape(w) for w in a.split(" ")) for a in words)
 
 
 def resolve(spans: Iterable[Span]) -> list[Span]:

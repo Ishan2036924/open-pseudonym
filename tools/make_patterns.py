@@ -20,7 +20,8 @@ NA = "(?![A-Za-z0-9_])"  # no word character right after
 NOT_WS = "[^ \\t\\r\\n\\f\\v]"
 UP = "A-ZÀ-ÖØ-Þ"
 LO = "a-zß-öø-ÿ"
-NAME = f"[{UP}][{LO}]+(?:[-'][{UP}]?[{LO}]+)?"
+# a capitalised word, also O'Neil, D'Angelo and Mary-Jane
+NAME = f"[{UP}][{LO}]*(?:'[{UP}])?[{LO}]+(?:-[{UP}]?[{LO}]+)?"
 FULL = f"{NAME}(?: {NAME}){{0,2}}"
 MON = (
     "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?"
@@ -53,8 +54,9 @@ add("API_KEY",
     group=1, priority=90, note="well-known key prefixes")
 add("API_KEY", NB + "(eyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,})" + NA, group=1, priority=90,
     note="JSON web token")
-add("EMAIL", NB + "([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})" + NA, group=1,
-    priority=85)
+# lengths are bounded (RFC 5321: 64 for the local part, 63 per label) so a long run without an @ stays linear
+add("EMAIL", NB + "([A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){0,8}\\.[A-Za-z]{2,24})" + NA,
+    group=1, priority=85)
 add("URL", "(https?://[^ \\t\\r\\n\\f\\v<>\"'`]+[^ \\t\\r\\n\\f\\v<>\"'`.,;:!?)\\]}])", group=1, priority=84)
 add("IBAN", NB + "([A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?)" + NA, group=1, check="iban",
     priority=82)
@@ -76,7 +78,7 @@ add("OTP", "(?<![0-9])([0-9]{4,8})(?![0-9]) is your [A-Za-z ]{0,30}?(?:code|pass
 add("OTP", NB + "(?:enter|use|type) ([0-9]{4,8})(?![0-9]) to (?:verify|confirm|continue|sign in|log in)", group=1,
     flags="i", priority=76)
 add("PASSWORD",
-    NB + "(?:password|passwd|pwd|passphrase)(?: is|:| =)[ \\t]*(?!https?://)(" + NOT_WS + "{4,64})",
+    NB + "(?:password|passwd|pwd|passphrase)(?: is:?|:| =)[ \\t]*(?!https?://)(" + NOT_WS + "{4,64})",
     group=1, flags="i", priority=75)
 add("IP_ADDRESS", f"(?<![0-9.])({OCTET}(?:\\.{OCTET}){{3}})(?![0-9.])", group=1, priority=70)
 add("PHONE", "(?<![0-9+])((?:\\+?1[ .-]?)?\\(?[2-9][0-9]{2}\\)?[ .-][0-9]{3}[ .-][0-9]{4})(?![0-9])", group=1,
@@ -106,7 +108,8 @@ add("ORG", NB + f"((?:[{UP}][A-Za-zÀ-ÿ&]+ ){{1,4}}(?:Inc|LLC|Ltd|Corp|Corporat
 add("PERSON", f"(?:^|\\n)[ \\t]*(?:[Hh]i|[Hh]ello|[Hh]ey|[Dd]ear|[Gg]ood (?:morning|afternoon|evening))[ ,]+({FULL})"
     "(?=[,!.\\n:]|$)", group=1, check="name", priority=40, note="greetings, in either case")
 add("PERSON", f"(?:Mr|Mrs|Ms|Mx|Dr|Prof)\\.? ({FULL})" + NA, group=1, check="name", priority=40)
-add("PERSON", f"(?:^|\\n)(?:From|To|Cc|Reply-To): *({FULL}) *<", group=1, check="name", priority=40)
+add("PERSON", f"(?:^|\\n)(?:From|To|Cc|Bcc|Reply-To): *({FULL}) *(?=<|,|\\n|$)", group=1, check="name", priority=40,
+    note="mail headers, with or without the address")
 add("PERSON",
     f"(?:^|\\n)[ \\t]*(?:Thanks|Thank you|Best|Regards|Best regards|Kind regards|Cheers|Sincerely|Warmly),?[ \\t]*\\n"
     f"[ \\t]*({FULL})[ \\t]*(?=\\n|$)",
@@ -121,6 +124,10 @@ add("PERSON",
     NB + "(?:with|meet|meeting|ask|call|email|cc|tell|invite|from|for|and|by|pay|paid|text|message|ping|remind"
     "|introduce|contact|thank|reply to|send to|sent to|forward to|write to|addressed to) (" + NAME + " " + NAME + ")" + NA,
     group=1, check="name", priority=39)
+add("PERSON",
+    NB + "(?:[Pp]atient|[Cc]lient|[Cc]ustomer|[Ee]mployee|[Tt]enant|[Aa]pplicant|[Cc]andidate|[Gg]uest|[Mm]ember"
+    "|[Rr]esident|[Oo]wner)(?: name)?:? (" + NAME + " " + NAME + ")" + NA,
+    group=1, check="name", priority=39, note="a role word before a full name, as in records and forms")
 add("PERSON", f"(?:^|[ (])to ({NAME} {NAME})(?=,)", group=1, check="name", priority=38,
     note="'to Ana Whitfield,' as in an address line")
 

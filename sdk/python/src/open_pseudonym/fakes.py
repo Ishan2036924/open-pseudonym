@@ -36,8 +36,6 @@ GENERIC_MAILBOXES = {
 }
 GENERIC_SUBDOMAINS = {"www", "docs", "mail", "app", "login", "api", "blog", "shop", "support", "help", "m", "accounts",
                       "auth", "id", "portal", "my"}
-TWO_PART_SUFFIXES = {"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "co.in",
-                     "com.br", "com.mx", "co.za", "com.sg", "com.cn", "com.tr", "co.kr"}
 AREA_CODES = ["201", "212", "312", "415", "512", "617", "720", "206", "305", "404"]
 TEST_NETS = ["192.0.2.", "198.51.100.", "203.0.113."]
 ORG_SUFFIX = re.compile(r" (Inc|LLC|Ltd|Corp|Corporation|GmbH|PLC|LLP|Co)(\.?)$")
@@ -115,10 +113,29 @@ def fill_template(template: str, digits: str) -> str:
     return "".join(next(it) if "0" <= ch <= "9" else ch for ch in template)
 
 
+_SUFFIXES: frozenset[str] | None = None
+
+
+def _suffixes() -> frozenset[str]:
+    global _SUFFIXES
+    if _SUFFIXES is None:
+        _SUFFIXES = frozenset(pools()["public_suffixes"])
+    return _SUFFIXES
+
+
+def is_public_suffix(host: str) -> bool:
+    return host.lower().rstrip(".") in _suffixes()
+
+
 def registrable(host: str) -> str:
+    """The part of a host that one owner controls: acme.com for login.acme.com, acme.github.io for
+    acme.github.io. Uses the suffix list in pools.json, a small subset of the Public Suffix List; implementations
+    with the full list should use it."""
     labels = host.lower().rstrip(".").split(".")
-    if len(labels) >= 3 and ".".join(labels[-2:]) in TWO_PART_SUFFIXES:
-        return ".".join(labels[-3:])
+    suffixes = _suffixes()
+    for n in range(len(labels) - 1, 0, -1):  # longest known suffix first
+        if ".".join(labels[-n:]) in suffixes:
+            return ".".join(labels[-(n + 1):]) if len(labels) > n else host.lower()
     return ".".join(labels[-2:])
 
 
@@ -265,9 +282,12 @@ def url(ctx: Ctx, real: str) -> str:
         return shape(ctx, real)
     rest_tokens = re.findall(r"[A-Za-z0-9]+|[^A-Za-z0-9]", m[4])
     out, after_equals = [], False
+    name_parts = [p for p in ctx.vault.parts if len(p) >= 3]
     for tok in rest_tokens:
+        low = tok.lower()
+        # a slug like /in/danareyes carries a name even without separators, so look inside each piece
         if tok[0].isalnum() and (after_equals or len(tok) >= 12 or any(c.isdigit() for c in tok)
-                                 or tok.lower() in ctx.vault.parts):
+                                 or any(part in low for part in name_parts)):
             out.append(shape(ctx, tok, "url"))
         else:
             out.append(tok)

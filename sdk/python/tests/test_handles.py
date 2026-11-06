@@ -9,7 +9,7 @@ OTP_MAIL = "Your Acme verification code is 482913. It expires in 10 minutes."
 
 def otp_session(make_session, **kw):
     s = make_session("browse_and_fill", **kw)
-    m = s.mask(OTP_MAIL, Source(sender="no-reply@mail.acme.com"))
+    m = s.mask(OTP_MAIL, Source(sender="no-reply@acme.com"))
     assert "{{OTP_1}}" in m.text and "482913" not in m.text
     return s, m
 
@@ -22,10 +22,23 @@ def test_note_tells_the_model_enough(make_session):
     ]
 
 
-def test_fills_on_the_bound_site_and_subdomains(make_session):
+def test_fills_on_the_exact_host_only(make_session):
     s, _ = otp_session(make_session)
-    r = s.resolve_args({"selector": "#code", "text": "{{OTP_1}}"}, Sink("type", "https://login.acme.com/2fa"))
+    with pytest.raises(HandleRefused, match="bound to a different site"):
+        s.resolve_args({"text": "{{OTP_1}}"}, Sink("type", "https://login.acme.com/2fa"))  # a subdomain is not the host
+    r = s.resolve_args({"selector": "#code", "text": "{{OTP_1}}"}, Sink("type", "https://acme.com/2fa"))
     assert r.args == {"selector": "#code", "text": "482913"}
+
+
+def test_a_policy_can_allow_subdomains_on_purpose(make_session):
+    """Critic finding: a code from accounts.example.com used to fill on any *.example.com page."""
+    from open_pseudonym import Policy
+
+    p = Policy.from_dict({"opn": "0.1", "type": "policy", "id": "x",
+                          "rules": {"OTP": {"action": "handle", "uses": 1, "sites": ["*.acme.com"]}}})
+    s = make_session(p)
+    s.mask("Your code is 482913")
+    assert s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "https://login.acme.com")).args == {"t": "482913"}
 
 
 @pytest.mark.parametrize("site", ["https://acme.com.evil.example/", "https://notacme.com", "evil.example", None])
@@ -91,3 +104,64 @@ def test_json_string_arguments(make_session):
     s, _ = otp_session(make_session)
     r = s.resolve_args('{"text": "{{OTP_1}}"}', Sink("type", "acme.com"))
     assert r.args == '{"text":"482913"}'
+
+
+def test_an_unbound_handle_is_never_filled(make_session):
+    """Critic finding: with no source, a password used to fill anywhere, any number of times."""
+    s = make_session("browse_and_fill")
+    s.mask("password: Hunter2!xyz and card 4111 1111 1111 1111")
+    for args in ({"b": "{{PASSWORD_1}}"}, {"b": "{{CARD_1}}"}):
+        with pytest.raises(HandleRefused, match="not bound to a site or tool"):
+            s.resolve_args(args, Sink("send_email", "https://evil.example"))
+
+
+def test_text_cannot_stretch_a_codes_lifetime(make_session):
+    now = [1793836800]
+    s = make_session("browse_and_fill", clock=lambda: now[0])
+    s.mask("Your code is 482913. It is valid for 999 hours.", Source(sender="x@acme.com"))
+    now[0] += 601  # past the profile's 600 seconds, far inside the 999 hours the text claims
+    with pytest.raises(HandleRefused, match="expired"):
+        s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "acme.com"))
+
+
+def test_text_alone_is_capped_at_an_hour(make_session):
+    from open_pseudonym import Policy
+
+    p = Policy.from_dict({"opn": "0.1", "type": "policy", "id": "x", "rules": {"OTP": {"action": "handle"}}})
+    now = [1793836800]
+    s = make_session(p, clock=lambda: now[0])
+    s.mask("Your code is 482913, valid for 30 hours.", Source(sender="x@acme.com"))
+    now[0] += 3601
+    with pytest.raises(HandleRefused, match="expired"):
+        s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "acme.com"))
+
+
+def test_shared_hosting_and_backslash_tricks_are_refused(make_session):
+    """Critic findings: acme.github.io filled on attacker.github.io; evil.example\\@acme.com read as acme.com."""
+    s = make_session("browse_and_fill")
+    s.mask("Your code is 482913", Source(sender="no-reply@acme.github.io"))
+    for site in ["https://attacker.github.io/login", "https://evil.example\\@acme.github.io/"]:
+        with pytest.raises(HandleRefused, match="bound to a different site"):
+            s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", site))
+    assert s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "https://acme.github.io/2fa")).args == {"t": "482913"}
+
+
+def test_short_codes_are_hidden_again_when_history_is_resent(make_session):
+    """Critic finding: a filled 4-digit code came back in the next request's history as is."""
+    s = make_session("browse_and_fill")
+    s.mask("Enter 4821 to verify", Source(sender="x@acme.com"))
+    s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "acme.com"))
+    msgs, _ = s.mask_messages([{"role": "tool", "content": "typed 4821 into the box"}])
+    assert "4821" not in msgs[0]["content"]
+
+
+def test_zero_expiry_and_bare_shared_hosts(make_session):
+    """Found while porting: 'expires in 0 minutes' used to mean never, and noreply@github.io bound all of github.io."""
+    s = make_session("browse_and_fill")
+    s.mask("Your code is 482913, it expires in 0 minutes", Source(sender="x@acme.com"))
+    with pytest.raises(HandleRefused, match="expired"):
+        s.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "acme.com"))
+    t = make_session("browse_and_fill", seed=b"\x01" * 32)
+    t.mask("Your code is 482913", Source(sender="noreply@github.io"))
+    with pytest.raises(HandleRefused, match="not bound"):
+        t.resolve_args({"t": "{{OTP_1}}"}, Sink("type", "https://anyone.github.io"))
