@@ -1,0 +1,101 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/policy.schema.json",
+ "title": "Open Pseudonym policy",
+ "description": "Spec section 5.",
+ "type": "object",
+ "required": [
+  "opn",
+  "type",
+  "id",
+  "rules"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "opn": {
+   "const": "0.1"
+  },
+  "type": {
+   "const": "policy"
+  },
+  "id": {
+   "type": "string",
+   "minLength": 1
+  },
+  "description": {
+   "type": "string"
+  },
+  "rules": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^[A-Z][A-Z0-9_]{1,31}$"
+   },
+   "additionalProperties": {
+    "$ref": "#/$defs/rule"
+   }
+  },
+  "default": {
+   "$ref": "#/$defs/rule"
+  },
+  "allow": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "$defs": {
+  "rule": {
+   "type": "object",
+   "required": [
+    "action"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "action": {
+     "enum": [
+      "keep",
+      "shift",
+      "generalize",
+      "fake",
+      "tag",
+      "token",
+      "fpe",
+      "handle",
+      "drop",
+      "refuse"
+     ]
+    },
+    "keep_gender": {
+     "type": "boolean"
+    },
+    "keep_region": {
+     "type": "boolean"
+    },
+    "uses": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "ttl_s": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "ask": {
+     "type": "boolean"
+    },
+    "tools": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "sites": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ }
+}

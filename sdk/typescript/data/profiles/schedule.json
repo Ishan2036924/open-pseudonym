@@ -1,0 +1,70 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "schedule",
+ "description": "Plan or move meetings. Dates and times stay real so calendar math works; people are faked.",
+ "rules": {
+  "PERSON": {
+   "action": "fake",
+   "keep_gender": true
+  },
+  "EMAIL": {
+   "action": "fake"
+  },
+  "PHONE": {
+   "action": "fake"
+  },
+  "ADDRESS": {
+   "action": "fake"
+  },
+  "URL": {
+   "action": "fake"
+  },
+  "IP_ADDRESS": {
+   "action": "fake"
+  },
+  "ORG": {
+   "action": "keep"
+  },
+  "LOCATION": {
+   "action": "keep"
+  },
+  "DATE": {
+   "action": "keep"
+  },
+  "MONEY": {
+   "action": "keep"
+  },
+  "CARD": {
+   "action": "handle"
+  },
+  "IBAN": {
+   "action": "handle"
+  },
+  "ROUTING": {
+   "action": "handle"
+  },
+  "BANK_ACCOUNT": {
+   "action": "handle"
+  },
+  "SSN": {
+   "action": "handle",
+   "ask": true
+  },
+  "API_KEY": {
+   "action": "handle"
+  },
+  "PASSWORD": {
+   "action": "handle"
+  },
+  "OTP": {
+   "action": "handle",
+   "uses": 1,
+   "ttl_s": 600
+  }
+ },
+ "default": {
+  "action": "tag"
+ },
+ "allow": []
+}

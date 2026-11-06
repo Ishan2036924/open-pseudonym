@@ -1,0 +1,67 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "summarize",
+ "description": "Summarize documents. Contact details are removed, people are faked, places are blurred.",
+ "rules": {
+  "PERSON": {
+   "action": "fake",
+   "keep_gender": true
+  },
+  "EMAIL": {
+   "action": "drop"
+  },
+  "PHONE": {
+   "action": "drop"
+  },
+  "ADDRESS": {
+   "action": "generalize"
+  },
+  "URL": {
+   "action": "drop"
+  },
+  "IP_ADDRESS": {
+   "action": "drop"
+  },
+  "ORG": {
+   "action": "fake"
+  },
+  "LOCATION": {
+   "action": "generalize"
+  },
+  "DATE": {
+   "action": "shift"
+  },
+  "MONEY": {
+   "action": "keep"
+  },
+  "CARD": {
+   "action": "drop"
+  },
+  "IBAN": {
+   "action": "drop"
+  },
+  "ROUTING": {
+   "action": "drop"
+  },
+  "BANK_ACCOUNT": {
+   "action": "drop"
+  },
+  "SSN": {
+   "action": "drop"
+  },
+  "API_KEY": {
+   "action": "drop"
+  },
+  "PASSWORD": {
+   "action": "drop"
+  },
+  "OTP": {
+   "action": "drop"
+  }
+ },
+ "default": {
+  "action": "tag"
+ },
+ "allow": []
+}

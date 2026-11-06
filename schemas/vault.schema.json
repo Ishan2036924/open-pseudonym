@@ -1,0 +1,34 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/vault.schema.json",
+ "title": "Open Pseudonym encrypted vault file",
+ "description": "Spec section 8. The decrypted body is a vault-state document.",
+ "type": "object",
+ "required": [
+  "opn",
+  "type",
+  "alg",
+  "nonce",
+  "ciphertext"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "opn": {
+   "const": "0.1"
+  },
+  "type": {
+   "const": "vault"
+  },
+  "alg": {
+   "const": "A256GCM"
+  },
+  "nonce": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_-]{16}$"
+  },
+  "ciphertext": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_-]+$"
+  }
+ }
+}

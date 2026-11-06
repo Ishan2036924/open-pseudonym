@@ -1,0 +1,371 @@
+{
+ "description": "Masking scenarios with fixed seeds and clocks (spec 6-10). Each step's expect is what a conforming SDK must produce, byte for byte.",
+ "scenarios": [
+  {
+   "name": "email reply with a code",
+   "profile": "draft_reply",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "From: Dana Reyes <dana.reyes@gmail.com>\nHi Sam,\n\nCan we move Thursday's call to March 12, 2026? Call me at (617) 555-0142.\nYour Acme verification code is 482913. It expires in 10 minutes.\n\nThanks,\nDana",
+     "source": {
+      "sender": "no-reply@acme.com"
+     },
+     "expect": {
+      "text": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+      "notes": [
+       "{{OTP_1}} is a 6-digit one-time code from acme.com, valid until 00:10 UTC. Write {{OTP_1}} exactly where the value is needed; the real value is filled in outside the model."
+      ]
+     }
+    },
+    {
+     "op": "restore",
+     "text": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+     "reveal": true,
+     "expect": "From: Dana Reyes <dana.reyes@gmail.com>\nHi Sam,\n\nCan we move Thursday's call to March 12, 2026? Call me at (617) 555-0142.\nYour Acme verification code is 482913. It expires in 10 minutes.\n\nThanks,\nDana"
+    },
+    {
+     "op": "restore",
+     "text": "Sounds good {{OTP_1}} [PERSON_9]",
+     "expect": "Sounds good [a 6-digit one-time code from acme.com, valid until 00:10 UTC] [PERSON_9]"
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "field": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://evil.example"
+     },
+     "expect": {
+      "refused": "bound to a different site"
+     }
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "field": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://login.acme.com"
+     },
+     "expect": {
+      "args": {
+       "field": "#otp",
+       "text": "482913"
+      }
+     }
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://login.acme.com"
+     },
+     "expect": {
+      "refused": "already used"
+     }
+    },
+    {
+     "op": "egress",
+     "payload": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis",
+     "expect": []
+    },
+    {
+     "op": "egress",
+     "payload": "From: Ellis Gallagher <ellis.gallagher@quarryhill.example>\nHi Jamie,\n\nCan we move Thursday's call to July 2, 2026? Call me at (206) 555-0112.\nYour Acme verification code is {{OTP_1}}. It expires in 10 minutes.\n\nThanks,\nEllis Dana",
+     "expect": [
+      "PERSON"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "schedule keeps dates, strict shifts them",
+   "profile": "schedule",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "Meet Priya Raman on 2026-03-12 and again on March 19, 2026 at 221 Baker Street.",
+     "expect": {
+      "text": "Meet Priya Raman on 2026-03-12 and again on March 19, 2026 at 151 Larch Street.",
+      "notes": []
+     }
+    },
+    {
+     "op": "mask",
+     "text": "Priya said 3/26/2026 works; ping priya.raman@acme.co.uk",
+     "expect": {
+      "text": "Lina said 3/26/2026 works; ping lina.gallagher@quarryhill.example",
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "strict profile, everything",
+   "profile": "strict",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "Hi Omar,\nI will meet Omar Haddad and Lena Novak on 2026-03-12 (Thu). Card 4242 4242 4242 4242, IBAN GB82 WEST 1234 5698 7654 32, SSN 123-45-6789, server 10.0.12.7, https://docs.acme.com/r/9921xq?u=omar, Northwind Traders Inc., $1,234.50",
+     "expect": {
+      "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+      "notes": [
+       "{{CARD_1}} is a Visa card ending 4242. Write {{CARD_1}} exactly where the value is needed; the real value is filled in outside the model.",
+       "{{IBAN_1}} is a bank account (IBAN, GB) ending 5432. Write {{IBAN_1}} exactly where the value is needed; the real value is filled in outside the model.",
+       "{{SSN_1}} is a social security number. Write {{SSN_1}} exactly where the value is needed; the real value is filled in outside the model."
+      ]
+     }
+    },
+    {
+     "op": "restore",
+     "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+     "reveal": true,
+     "expect": "Hi Omar,\nI will meet Omar Haddad and Lena Novak on 2026-03-12 (Thu). Card 4242 4242 4242 4242, IBAN GB82 WEST 1234 5698 7654 32, SSN 123-45-6789, server 10.0.12.7, https://docs.acme.com/r/9921xq?u=omar, Northwind Traders Inc., $1,234.50"
+    },
+    {
+     "op": "stream",
+     "text": "Hi Bruno,\nI will meet Bruno Gallagher and Lina Wagner on 2026-07-02 (Thu). Card {{CARD_1}}, IBAN {{IBAN_1}}, SSN {{SSN_1}}, server 203.0.113.4, https://docs.quarryhill.example/r/7430fv?u=yzsn, Brightpath Learning Inc., $1,234.50",
+     "chunks": [
+      1,
+      2,
+      3,
+      5,
+      8,
+      13,
+      21,
+      34,
+      55
+     ],
+     "expect": "Hi Omar,\nI will meet Omar Haddad and Lena Novak on 2026-03-12 (Thu). Card [a Visa card ending 4242], IBAN [a bank account (IBAN, GB) ending 5432], SSN [a social security number], server 10.0.12.7, https://docs.acme.com/r/9921xq?u=omar, Northwind Traders Inc., $1,234.50"
+    },
+    {
+     "op": "mask",
+     "text": "OMAR HADDAD replied; Lena too.",
+     "expect": {
+      "text": "BRUNO GALLAGHER replied; Lina too.",
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "training data across documents",
+   "profile": "training_data",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "Patient contact: Elena Ortiz, elena.ortiz@example.org, +1 (415) 555-0199.",
+     "expect": {
+      "text": "Patient contact: Lina Gallagher, lina.gallagher@quarryhill.example, +1 (206) 555-0112.",
+      "notes": []
+     }
+    },
+    {
+     "op": "mask",
+     "text": "Follow-up for Elena Ortiz on 2026-04-02; billed $480.00.",
+     "expect": {
+      "text": "Follow-up for Lina Gallagher on 2026-07-23; billed $480.00.",
+      "notes": []
+     }
+    },
+    {
+     "op": "mask",
+     "text": "password: Tr0ub4dor&3 and key sk-proj-abcdefghijklmnopqrstuvwx123",
+     "expect": {
+      "text": "password: [PASSWORD removed] and key [API_KEY removed]",
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "egress reads bare JSON values and ignores stopword name parts",
+   "profile": "training_data",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {
+    "PERSON": [
+     "May Chen"
+    ]
+   },
+   "steps": [
+    {
+     "op": "mask",
+     "text": "card 4242 4242 4242 4242 for May Chen",
+     "expect": {
+      "text": "card [CARD removed] for Ellis Gallagher",
+      "notes": []
+     }
+    },
+    {
+     "op": "egress",
+     "payload": "4242424242424242",
+     "expect": [
+      "CARD"
+     ]
+    },
+    {
+     "op": "egress",
+     "payload": "[4242424242424242]",
+     "expect": [
+      "CARD"
+     ]
+    },
+    {
+     "op": "egress",
+     "payload": "see you May 5",
+     "expect": []
+    },
+    {
+     "op": "egress",
+     "payload": "Chen said hi",
+     "expect": [
+      "PERSON"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "logs use stable tokens",
+   "profile": "logs",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "2026-11-05 login failed for dana@acme.com from 10.0.12.7",
+     "expect": {
+      "text": "2026-11-05 login failed for email_0842fd43 from 203.0.113.4",
+      "notes": []
+     }
+    },
+    {
+     "op": "mask",
+     "text": "2026-11-05 login ok for DANA@ACME.COM",
+     "expect": {
+      "text": "2026-11-05 login ok for email_0842fd43",
+      "notes": []
+     }
+    },
+    {
+     "op": "restore",
+     "text": "2026-11-05 login ok for email_0842fd43",
+     "expect": "2026-11-05 login ok for dana@acme.com"
+    }
+   ]
+  },
+  {
+   "name": "known contacts and chat messages",
+   "profile": "contacts",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {
+    "PERSON": [
+     "Iris"
+    ]
+   },
+   "steps": [
+    {
+     "op": "mask_messages",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You help with email."
+      },
+      {
+       "role": "user",
+       "content": [
+        {
+         "type": "text",
+         "text": "Text Iris at +44 7700 900123, code 5521 is your PIN"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "tool_calls": [
+        {
+         "id": "c1",
+         "type": "function",
+         "function": {
+          "name": "send_sms",
+          "arguments": "{\"to\":\"+44 7700 900123\",\"body\":\"hi Iris\"}"
+         }
+        }
+       ]
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "c1",
+       "content": "sent to +44 7700 900123"
+      }
+     ],
+     "expect": {
+      "messages": [
+       {
+        "role": "system",
+        "content": "You help with email."
+       },
+       {
+        "role": "user",
+        "content": [
+         {
+          "type": "text",
+          "text": "Text Iris at +44 7700 900746, code {{OTP_1}} is your PIN"
+         },
+         {
+          "type": "text",
+          "text": "Note: {{OTP_1}} is a 4-digit one-time code, valid until 00:10 UTC. Write {{OTP_1}} exactly where the value is needed; the real value is filled in outside the model."
+         }
+        ]
+       },
+       {
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "id": "c1",
+          "type": "function",
+          "function": {
+           "name": "send_sms",
+           "arguments": "{\"to\":\"+44 7700 900746\",\"body\":\"hi Iris\"}"
+          }
+         }
+        ]
+       },
+       {
+        "role": "tool",
+        "tool_call_id": "c1",
+        "content": "sent to +44 7700 900746"
+       }
+      ],
+      "notes": [
+       "{{OTP_1}} is a 4-digit one-time code, valid until 00:10 UTC. Write {{OTP_1}} exactly where the value is needed; the real value is filled in outside the model."
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

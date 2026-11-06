@@ -1,0 +1,31 @@
+{
+ "description": "Egress receipt signing (spec 11.2). Ed25519 is deterministic, so the token is exact.",
+ "private_key_seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+ "public_key": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+ "kid": "sha-256:1IG2tMH7J2wbJZnOf8LJzQitKf7LMvoAElsuDMVM54Y",
+ "canonical_body": "{\"check\":{\"found\":0,\"known_values\":3},\"dest\":\"api.example.com\",\"detectors\":[\"rules@1\",\"known@1\"],\"iat\":1793836800,\"opn\":\"0.1\",\"payload\":\"sha-256:LPJNul-wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ\",\"policy\":\"sha-256:jdAfZhm1V31oy_whaohi79RK1PdPATX2cypcy_o5QRo\",\"prev\":null,\"seq\":1,\"session\":\"s1\",\"stand_ins\":{\"PERSON\":2},\"type\":\"egress\"}",
+ "body": {
+  "opn": "0.1",
+  "type": "egress",
+  "session": "s1",
+  "seq": 1,
+  "iat": 1793836800,
+  "prev": null,
+  "dest": "api.example.com",
+  "payload": "sha-256:LPJNul-wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ",
+  "policy": "sha-256:jdAfZhm1V31oy_whaohi79RK1PdPATX2cypcy_o5QRo",
+  "stand_ins": {
+   "PERSON": 2
+  },
+  "check": {
+   "known_values": 3,
+   "found": 0
+  },
+  "detectors": [
+   "rules@1",
+   "known@1"
+  ]
+ },
+ "token": "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1lZ3Jlc3MrandzIn0.eyJjaGVjayI6eyJmb3VuZCI6MCwia25vd25fdmFsdWVzIjozfSwiZGVzdCI6ImFwaS5leGFtcGxlLmNvbSIsImRldGVjdG9ycyI6WyJydWxlc0AxIiwia25vd25AMSJdLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsInBheWxvYWQiOiJzaGEtMjU2OkxQSk51bC13b3c0bTZEc3F4Ym5pbmhzV0hsd2ZwMEplY3dRellwT0xtQ1EiLCJwb2xpY3kiOiJzaGEtMjU2OmpkQWZaaG0xVjMxb3lfd2hhb2hpNzlSSzFQZFBBVFgyY3lwY3lfbzVRUm8iLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInN0YW5kX2lucyI6eyJQRVJTT04iOjJ9LCJ0eXBlIjoiZWdyZXNzIn0.rFkxO4FOkQfiG0sow5774ys9gXJZOABdB6dyyYK8OengVbNqZexiXn3RNRpLHa45iR0kzZT702kUgmu0AXdlDw",
+ "payload_digest_of_hello": "sha-256:LPJNul-wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ"
+}

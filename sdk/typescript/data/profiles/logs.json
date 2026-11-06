@@ -1,0 +1,69 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "logs",
+ "description": "Debug from logs. The same user always gets the same token, across sessions if you pin the token key.",
+ "rules": {
+  "PERSON": {
+   "action": "token"
+  },
+  "EMAIL": {
+   "action": "token"
+  },
+  "PHONE": {
+   "action": "token"
+  },
+  "ADDRESS": {
+   "action": "drop"
+  },
+  "URL": {
+   "action": "fake"
+  },
+  "IP_ADDRESS": {
+   "action": "fake"
+  },
+  "ID": {
+   "action": "token"
+  },
+  "ORG": {
+   "action": "keep"
+  },
+  "LOCATION": {
+   "action": "keep"
+  },
+  "DATE": {
+   "action": "keep"
+  },
+  "MONEY": {
+   "action": "keep"
+  },
+  "CARD": {
+   "action": "drop"
+  },
+  "IBAN": {
+   "action": "drop"
+  },
+  "ROUTING": {
+   "action": "drop"
+  },
+  "BANK_ACCOUNT": {
+   "action": "drop"
+  },
+  "SSN": {
+   "action": "drop"
+  },
+  "API_KEY": {
+   "action": "drop"
+  },
+  "PASSWORD": {
+   "action": "drop"
+  },
+  "OTP": {
+   "action": "drop"
+  }
+ },
+ "default": {
+  "action": "token"
+ },
+ "allow": []
+}

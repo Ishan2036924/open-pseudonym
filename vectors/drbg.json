@@ -1,0 +1,55 @@
+{
+ "description": "HMAC-SHA256 counter-mode draws (spec 7.1). Values come from the reference SDK; the block for (label 'first.f', counter 0) is given so the construction itself can be checked.",
+ "seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+ "first_block": {
+  "label": "first.f",
+  "counter": 0,
+  "hex": "a787b1d03e95e330e30477f28cb26a0b9bb20101197f3f67eb3def1a9b740d71"
+ },
+ "derive": {
+  "purpose": "fpe",
+  "hex": "ea6bc950e4366d30828e41f04fe9fbb308e5d30b1dbc17305028a80fd2d4d708"
+ },
+ "draws": [
+  {
+   "label": "first.f",
+   "n": 60,
+   "value": 48
+  },
+  {
+   "label": "first.f",
+   "n": 60,
+   "value": 26
+  },
+  {
+   "label": "last",
+   "n": 79,
+   "value": 33
+  },
+  {
+   "label": "date.offset",
+   "n": 52,
+   "value": 8
+  },
+  {
+   "label": "phone.line",
+   "n": 10,
+   "value": 3
+  },
+  {
+   "label": "first.f",
+   "n": 60,
+   "value": 25
+  },
+  {
+   "label": "x",
+   "n": 1,
+   "value": 0
+  },
+  {
+   "label": "big",
+   "n": 1000003,
+   "value": 615942
+  }
+ ]
+}

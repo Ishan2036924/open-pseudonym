@@ -1,0 +1,24 @@
+# Default gitleaks rules, plus a few narrow exceptions for public test material. Each one names exactly what it lets
+# through and why; anything else that looks like a secret still fails the scan.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "NIST SP 800-38G FF1 sample keys (public test values)"
+targetRules = ["generic-api-key"]
+regexes = ['''2B7E151628AED2A6ABF7158809CF4F3C''']
+
+[[allowlists]]
+description = "Receipt vector: a JWS signed with a published test key"
+targetRules = ["jwt"]
+paths = ['''^vectors/receipts\.json$''']
+
+[[allowlists]]
+description = "Obviously fake keys in tests and fixtures (they contain the alphabet run abcdefghijklmnopqr)"
+targetRules = ["generic-api-key"]
+regexes = ['''abcdefghijklmnopqr''']
+
+[[allowlists]]
+description = "Type names, not values"
+targetRules = ["generic-api-key"]
+regexes = ['''Ed25519PrivateKey''']

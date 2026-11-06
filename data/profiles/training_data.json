@@ -1,0 +1,70 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "training_data",
+ "description": "Batch mode for datasets. Everything personal is faked consistently across files; secrets are removed.",
+ "rules": {
+  "PERSON": {
+   "action": "fake",
+   "keep_gender": true
+  },
+  "EMAIL": {
+   "action": "fake"
+  },
+  "PHONE": {
+   "action": "fake"
+  },
+  "ADDRESS": {
+   "action": "fake"
+  },
+  "URL": {
+   "action": "fake"
+  },
+  "IP_ADDRESS": {
+   "action": "fake"
+  },
+  "ORG": {
+   "action": "fake"
+  },
+  "LOCATION": {
+   "action": "fake"
+  },
+  "DATE": {
+   "action": "shift"
+  },
+  "MONEY": {
+   "action": "keep"
+  },
+  "ID": {
+   "action": "token"
+  },
+  "CARD": {
+   "action": "drop"
+  },
+  "IBAN": {
+   "action": "drop"
+  },
+  "ROUTING": {
+   "action": "drop"
+  },
+  "BANK_ACCOUNT": {
+   "action": "drop"
+  },
+  "SSN": {
+   "action": "drop"
+  },
+  "API_KEY": {
+   "action": "drop"
+  },
+  "PASSWORD": {
+   "action": "drop"
+  },
+  "OTP": {
+   "action": "drop"
+  }
+ },
+ "default": {
+  "action": "fake"
+ },
+ "allow": []
+}

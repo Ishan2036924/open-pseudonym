@@ -1,0 +1,96 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/egress-receipt.schema.json",
+ "title": "Open Pseudonym egress receipt payload",
+ "description": "Spec section 11.2. Signed as a compact JWS, typ opn-egress+jws.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "opn",
+  "type",
+  "session",
+  "seq",
+  "iat",
+  "prev",
+  "dest",
+  "payload",
+  "policy",
+  "stand_ins",
+  "check",
+  "detectors"
+ ],
+ "properties": {
+  "opn": {
+   "const": "0.1"
+  },
+  "type": {
+   "const": "egress"
+  },
+  "session": {
+   "type": "string"
+  },
+  "seq": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "iat": {
+   "type": "integer"
+  },
+  "prev": {
+   "oneOf": [
+    {
+     "type": "null"
+    },
+    {
+     "type": "string",
+     "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    }
+   ]
+  },
+  "dest": {
+   "type": "string"
+  },
+  "payload": {
+   "type": "string",
+   "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+  },
+  "policy": {
+   "type": "string",
+   "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+  },
+  "stand_ins": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^[A-Z][A-Z0-9_]{1,31}$"
+   },
+   "additionalProperties": {
+    "type": "integer",
+    "minimum": 0
+   }
+  },
+  "check": {
+   "type": "object",
+   "required": [
+    "known_values",
+    "found"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "known_values": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "found": {
+     "type": "integer",
+     "minimum": 0
+    }
+   }
+  },
+  "detectors": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ }
+}

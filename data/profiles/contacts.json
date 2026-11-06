@@ -1,0 +1,51 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "contacts",
+ "description": "Secrets plus contact details (emails, phones, street addresses) are hidden; names stay.",
+ "rules": {
+  "EMAIL": {
+   "action": "fake"
+  },
+  "PHONE": {
+   "action": "fake"
+  },
+  "ADDRESS": {
+   "action": "fake"
+  },
+  "IP_ADDRESS": {
+   "action": "fake"
+  },
+  "CARD": {
+   "action": "handle"
+  },
+  "IBAN": {
+   "action": "handle"
+  },
+  "ROUTING": {
+   "action": "handle"
+  },
+  "BANK_ACCOUNT": {
+   "action": "handle"
+  },
+  "SSN": {
+   "action": "handle",
+   "ask": true
+  },
+  "API_KEY": {
+   "action": "handle"
+  },
+  "PASSWORD": {
+   "action": "handle"
+  },
+  "OTP": {
+   "action": "handle",
+   "uses": 1,
+   "ttl_s": 600
+  }
+ },
+ "default": {
+  "action": "keep"
+ },
+ "allow": []
+}

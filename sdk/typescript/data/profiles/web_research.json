@@ -1,0 +1,67 @@
+{
+ "opn": "0.1",
+ "type": "policy",
+ "id": "web_research",
+ "description": "Look things up. Public names (companies, places, links) stay so search works; people are faked.",
+ "rules": {
+  "PERSON": {
+   "action": "fake",
+   "keep_gender": true
+  },
+  "EMAIL": {
+   "action": "drop"
+  },
+  "PHONE": {
+   "action": "drop"
+  },
+  "ADDRESS": {
+   "action": "generalize"
+  },
+  "URL": {
+   "action": "keep"
+  },
+  "IP_ADDRESS": {
+   "action": "drop"
+  },
+  "ORG": {
+   "action": "keep"
+  },
+  "LOCATION": {
+   "action": "keep"
+  },
+  "DATE": {
+   "action": "keep"
+  },
+  "MONEY": {
+   "action": "keep"
+  },
+  "CARD": {
+   "action": "drop"
+  },
+  "IBAN": {
+   "action": "drop"
+  },
+  "ROUTING": {
+   "action": "drop"
+  },
+  "BANK_ACCOUNT": {
+   "action": "drop"
+  },
+  "SSN": {
+   "action": "drop"
+  },
+  "API_KEY": {
+   "action": "drop"
+  },
+  "PASSWORD": {
+   "action": "drop"
+  },
+  "OTP": {
+   "action": "drop"
+  }
+ },
+ "default": {
+  "action": "tag"
+ },
+ "allow": []
+}

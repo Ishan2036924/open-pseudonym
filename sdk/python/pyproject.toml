@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-pseudonym"
+version = "0.1.0"
+description = "Open Pseudonym: keep personal data away from AI models without making them worse at the task. Task-aware stand-ins, local restore, secret handles and signed egress receipts."
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Ishan Srivastava" }]
+requires-python = ">=3.10"
+keywords = ["pseudonymization", "privacy", "llm", "pii", "ai-agents", "mcp", "open-standard"]
+dependencies = ["cryptography>=42"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+proxy = ["starlette>=0.40", "uvicorn>=0.30", "httpx>=0.27"]
+mcp = ["mcp>=2.3,<3"]
+browser = ["playwright>=1.50"]
+openai = ["openai>=1.50"]
+anthropic = ["anthropic>=0.40"]
+gliner = ["gliner>=0.2"]
+spacy = ["spacy>=3.7"]
+all = ["starlette>=0.40", "uvicorn>=0.30", "httpx>=0.27", "mcp>=2.3,<3", "playwright>=1.50", "openai>=1.50", "anthropic>=0.40"]
+test = ["pytest>=8", "anyio>=4"]
+
+[project.scripts]
+opn = "open_pseudonym.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Ishan2036924/open-pseudonym"
+Specification = "https://github.com/Ishan2036924/open-pseudonym/blob/main/spec/open-pseudonym.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+open_pseudonym = ["data/*.json", "data/profiles/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

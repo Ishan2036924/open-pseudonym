@@ -1,0 +1,71 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/patterns.schema.json",
+ "title": "Shared detection patterns",
+ "description": "Spec section 4.1.",
+ "type": "object",
+ "required": [
+  "version",
+  "patterns"
+ ],
+ "properties": {
+  "version": {
+   "type": "integer"
+  },
+  "note": {
+   "type": "string"
+  },
+  "patterns": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "type",
+     "pattern",
+     "group",
+     "flags",
+     "check",
+     "priority"
+    ],
+    "properties": {
+     "type": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,31}$"
+     },
+     "pattern": {
+      "type": "string"
+     },
+     "group": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "flags": {
+      "enum": [
+       "",
+       "i"
+      ]
+     },
+     "check": {
+      "enum": [
+       null,
+       "card",
+       "iban",
+       "ssn",
+       "aba",
+       "phone",
+       "date",
+       "name"
+      ]
+     },
+     "priority": {
+      "type": "integer"
+     },
+     "note": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ }
+}

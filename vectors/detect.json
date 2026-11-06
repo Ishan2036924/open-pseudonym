@@ -1,0 +1,172 @@
+{
+ "description": "Detection and merging (spec 4). Hand-written expectations.",
+ "cases": [
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "From: Dana Reyes <dana.reyes@gmail.com>\nHi Sam,\nCall (617) 555-0142 on March 12, 2026.",
+   "spans": [
+    [
+     "PERSON",
+     "Dana Reyes"
+    ],
+    [
+     "EMAIL",
+     "dana.reyes@gmail.com"
+    ],
+    [
+     "PERSON",
+     "Sam"
+    ],
+    [
+     "PHONE",
+     "(617) 555-0142"
+    ],
+    [
+     "DATE",
+     "March 12, 2026"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "card 4242 4242 4242 4242, not 4242 4242 4242 4241; IBAN GB82 WEST 1234 5698 7654 32",
+   "spans": [
+    [
+     "CARD",
+     "4242 4242 4242 4242"
+    ],
+    [
+     "IBAN",
+     "GB82 WEST 1234 5698 7654 32"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Your verification code is 482913. password: Tr0ub4dor&3 server 10.0.12.7",
+   "spans": [
+    [
+     "OTP",
+     "482913"
+    ],
+    [
+     "PASSWORD",
+     "Tr0ub4dor&3"
+    ],
+    [
+     "IP_ADDRESS",
+     "10.0.12.7"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "meet in New York with Priya Raman at 221 Baker Street, Apt 4 for $1,234.50",
+   "spans": [
+    [
+     "PERSON",
+     "Priya Raman"
+    ],
+    [
+     "ADDRESS",
+     "221 Baker Street, Apt 4"
+    ],
+    [
+     "MONEY",
+     "$1,234.50"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "SSN 123-45-6789, routing number 021000021, tracking 123456789, see https://acme.com/a?id=7.",
+   "spans": [
+    [
+     "SSN",
+     "123-45-6789"
+    ],
+    [
+     "ROUTING",
+     "021000021"
+    ],
+    [
+     "URL",
+     "https://acme.com/a?id=7"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "signed with Northwind Traders Inc. on 2026-02-30 and 12 Mar 2026",
+   "spans": [
+    [
+     "ORG",
+     "Northwind Traders Inc."
+    ],
+    [
+     "DATE",
+     "12 Mar 2026"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "hey Carmen, my login code was 551208. Thanks Femi Adebayo for the help!",
+   "spans": [
+    [
+     "PERSON",
+     "Carmen"
+    ],
+    [
+     "OTP",
+     "551208"
+    ],
+    [
+     "PERSON",
+     "Femi Adebayo"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "{\"results\": [{\"name\": \"Ana Whitfield\", \"role\": \"approver\"}, {\"requester\": \"Dev Malhotra\"}]}",
+   "spans": [
+    [
+     "PERSON",
+     "Ana Whitfield"
+    ],
+    [
+     "PERSON",
+     "Dev Malhotra"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Please pay Bilal Okonkwo back. Invoice to Grace Lindholm, 48 Harbor Road.",
+   "spans": [
+    [
+     "PERSON",
+     "Bilal Okonkwo"
+    ],
+    [
+     "PERSON",
+     "Grace Lindholm"
+    ],
+    [
+     "ADDRESS",
+     "48 Harbor Road"
+    ]
+   ]
+  }
+ ]
+}

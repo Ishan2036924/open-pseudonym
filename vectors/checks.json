@@ -1,0 +1,120 @@
+{
+ "description": "Checksums and sanity checks (spec 4.1). Hand-written.",
+ "cases": [
+  {
+   "check": "card",
+   "value": "4242 4242 4242 4242",
+   "ok": true
+  },
+  {
+   "check": "card",
+   "value": "4242 4242 4242 4241",
+   "ok": false
+  },
+  {
+   "check": "card",
+   "value": "378282246310005",
+   "ok": true
+  },
+  {
+   "check": "card",
+   "value": "2223003122003222",
+   "ok": true
+  },
+  {
+   "check": "card",
+   "value": "1111111111111117",
+   "ok": false
+  },
+  {
+   "check": "card",
+   "value": "0000000000000000",
+   "ok": false
+  },
+  {
+   "check": "iban",
+   "value": "GB82 WEST 1234 5698 7654 32",
+   "ok": true
+  },
+  {
+   "check": "iban",
+   "value": "GB83 WEST 1234 5698 7654 32",
+   "ok": false
+  },
+  {
+   "check": "iban",
+   "value": "DE89370400440532013000",
+   "ok": true
+  },
+  {
+   "check": "iban",
+   "value": "XX89370400440532013000",
+   "ok": false
+  },
+  {
+   "check": "aba",
+   "value": "021000021",
+   "ok": true
+  },
+  {
+   "check": "aba",
+   "value": "021000022",
+   "ok": false
+  },
+  {
+   "check": "aba",
+   "value": "991000021",
+   "ok": false
+  },
+  {
+   "check": "ssn",
+   "value": "123-45-6789",
+   "ok": true
+  },
+  {
+   "check": "ssn",
+   "value": "666-45-6789",
+   "ok": false
+  },
+  {
+   "check": "ssn",
+   "value": "900-45-6789",
+   "ok": false
+  },
+  {
+   "check": "ssn",
+   "value": "123-00-6789",
+   "ok": false
+  },
+  {
+   "check": "ssn",
+   "value": "123-45-0000",
+   "ok": false
+  },
+  {
+   "check": "phone",
+   "value": "(617) 555-0142",
+   "ok": true
+  },
+  {
+   "check": "phone",
+   "value": "555-0142",
+   "ok": false
+  },
+  {
+   "check": "name",
+   "value": "Dana Reyes",
+   "ok": true
+  },
+  {
+   "check": "name",
+   "value": "New York",
+   "ok": false
+  },
+  {
+   "check": "name",
+   "value": "Hi",
+   "ok": false
+  }
+ ]
+}

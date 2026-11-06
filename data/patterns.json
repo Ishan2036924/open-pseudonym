@@ -1,0 +1,312 @@
+{
+ "version": 1,
+ "note": "Detection patterns shared by every SDK. See spec section 4.",
+ "patterns": [
+  {
+   "type": "API_KEY",
+   "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----",
+   "group": 0,
+   "flags": "",
+   "check": null,
+   "priority": 95,
+   "note": "PEM private key block"
+  },
+  {
+   "type": "API_KEY",
+   "pattern": "(?<![A-Za-z0-9_])((?:sk-(?:proj-|ant-[a-z0-9]+-)?|sk_live_|sk_test_|rk_live_|rk_test_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|hf_|AKIA|ASIA|AIza)[A-Za-z0-9_-]{16,})(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 90,
+   "note": "well-known key prefixes"
+  },
+  {
+   "type": "API_KEY",
+   "pattern": "(?<![A-Za-z0-9_])(eyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,})(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 90,
+   "note": "JSON web token"
+  },
+  {
+   "type": "EMAIL",
+   "pattern": "(?<![A-Za-z0-9_])([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 85,
+   "note": ""
+  },
+  {
+   "type": "URL",
+   "pattern": "(https?://[^ \\t\\r\\n\\f\\v<>\"'`]+[^ \\t\\r\\n\\f\\v<>\"'`.,;:!?)\\]}])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 84,
+   "note": ""
+  },
+  {
+   "type": "IBAN",
+   "pattern": "(?<![A-Za-z0-9_])([A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "iban",
+   "priority": 82,
+   "note": ""
+  },
+  {
+   "type": "CARD",
+   "pattern": "(?<![0-9])((?:[0-9][ -]?){12,18}[0-9])(?![0-9])",
+   "group": 1,
+   "flags": "",
+   "check": "card",
+   "priority": 81,
+   "note": ""
+  },
+  {
+   "type": "SSN",
+   "pattern": "(?<![0-9-])([0-9]{3}-[0-9]{2}-[0-9]{4})(?![0-9-])",
+   "group": 1,
+   "flags": "",
+   "check": "ssn",
+   "priority": 80,
+   "note": ""
+  },
+  {
+   "type": "SSN",
+   "pattern": "(?<![A-Za-z0-9_])(?:ssn|social security(?: number| no\\.?)?)[^0-9\\n]{0,12}?([0-9]{9}|[0-9]{3} [0-9]{2} [0-9]{4})(?![0-9])",
+   "group": 1,
+   "flags": "i",
+   "check": "ssn",
+   "priority": 80,
+   "note": "bare nine digits only right after an SSN cue"
+  },
+  {
+   "type": "ROUTING",
+   "pattern": "(?<![A-Za-z0-9_])(?:routing|aba|rtn)[^0-9\\n]{0,30}?([0-9]{9})(?![0-9])",
+   "group": 1,
+   "flags": "i",
+   "check": "aba",
+   "priority": 79,
+   "note": ""
+  },
+  {
+   "type": "BANK_ACCOUNT",
+   "pattern": "(?<![A-Za-z0-9_])(?:account|acct)(?: number| no\\.?| #|#)?[^0-9\\n]{0,6}?([0-9]{6,17})(?![0-9])",
+   "group": 1,
+   "flags": "i",
+   "check": null,
+   "priority": 78,
+   "note": ""
+  },
+  {
+   "type": "OTP",
+   "pattern": "(?<![A-Za-z0-9_])(?:verification|security|login|sign[- ]?in|one[- ]time|confirmation|access|2fa|auth(?:entication)?)? ?(?:code|passcode|otp|pin)(?: is| was|:| =)? ?([0-9]{4,8}|[0-9]{3} [0-9]{3})(?![0-9])",
+   "group": 1,
+   "flags": "i",
+   "check": null,
+   "priority": 76,
+   "note": ""
+  },
+  {
+   "type": "OTP",
+   "pattern": "(?<![0-9])([0-9]{4,8})(?![0-9]) is your [A-Za-z ]{0,30}?(?:code|passcode|otp|pin)",
+   "group": 1,
+   "flags": "i",
+   "check": null,
+   "priority": 76,
+   "note": ""
+  },
+  {
+   "type": "OTP",
+   "pattern": "(?<![A-Za-z0-9_])(?:enter|use|type) ([0-9]{4,8})(?![0-9]) to (?:verify|confirm|continue|sign in|log in)",
+   "group": 1,
+   "flags": "i",
+   "check": null,
+   "priority": 76,
+   "note": ""
+  },
+  {
+   "type": "PASSWORD",
+   "pattern": "(?<![A-Za-z0-9_])(?:password|passwd|pwd|passphrase)(?: is|:| =)[ \\t]*(?!https?://)([^ \\t\\r\\n\\f\\v]{4,64})",
+   "group": 1,
+   "flags": "i",
+   "check": null,
+   "priority": 75,
+   "note": ""
+  },
+  {
+   "type": "IP_ADDRESS",
+   "pattern": "(?<![0-9.])((?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3})(?![0-9.])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 70,
+   "note": ""
+  },
+  {
+   "type": "PHONE",
+   "pattern": "(?<![0-9+])((?:\\+?1[ .-]?)?\\(?[2-9][0-9]{2}\\)?[ .-][0-9]{3}[ .-][0-9]{4})(?![0-9])",
+   "group": 1,
+   "flags": "",
+   "check": "phone",
+   "priority": 68,
+   "note": "North American numbers, separators required"
+  },
+  {
+   "type": "PHONE",
+   "pattern": "(?<![0-9+])(\\+[1-9][0-9]{0,2}(?:[ .-]?\\(?[0-9]{1,4}\\)?){2,5}[0-9])(?![0-9])",
+   "group": 1,
+   "flags": "",
+   "check": "phone",
+   "priority": 67,
+   "note": "international numbers that start with +"
+  },
+  {
+   "type": "DATE",
+   "pattern": "(?<![0-9])([0-9]{4}-[0-9]{2}-[0-9]{2})(?![0-9])",
+   "group": 1,
+   "flags": "",
+   "check": "date",
+   "priority": 60,
+   "note": "ISO 2026-03-05"
+  },
+  {
+   "type": "DATE",
+   "pattern": "(?<![0-9/])([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})(?![0-9/])",
+   "group": 1,
+   "flags": "",
+   "check": "date",
+   "priority": 60,
+   "note": "03/05/2026, month first unless the session says day first"
+  },
+  {
+   "type": "DATE",
+   "pattern": "(?<![A-Za-z0-9_])((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.? [0-9]{1,2}(?:st|nd|rd|th)?(?:, [0-9]{4})?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "date",
+   "priority": 60,
+   "note": "March 5, 2026 or March 5"
+  },
+  {
+   "type": "DATE",
+   "pattern": "(?<![A-Za-z0-9_])([0-9]{1,2}(?:st|nd|rd|th)? (?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?(?: [0-9]{4})?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "date",
+   "priority": 60,
+   "note": "5 March 2026"
+  },
+  {
+   "type": "MONEY",
+   "pattern": "([$€£] ?[0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]{2})?|[$€£] ?[0-9]+(?:\\.[0-9]{2})?)(?![0-9])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 55,
+   "note": ""
+  },
+  {
+   "type": "MONEY",
+   "pattern": "(?<![A-Za-z0-9_])([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})? ?(?:USD|EUR|GBP|dollars|euros))(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 55,
+   "note": ""
+  },
+  {
+   "type": "ADDRESS",
+   "pattern": "(?<![A-Za-z0-9_])([0-9]{1,6}[A-Z]? (?:[A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+ ){1,3}(?:Street|Avenue|Road|Lane|Drive|Boulevard|Way|Court|Place|Terrace|Parkway|Highway|Square|(?:St|Ave|Rd|Ln|Dr|Blvd|Ct|Pl|Pkwy|Hwy|Sq)\\.?)(?:,? (?:Apt|Apartment|Suite|Ste|Unit|#) ?[A-Za-z0-9-]+)?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 52,
+   "note": ""
+  },
+  {
+   "type": "ORG",
+   "pattern": "(?<![A-Za-z0-9_])((?:[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ&]+ ){1,4}(?:Inc|LLC|Ltd|Corp|Corporation|GmbH|PLC|LLP|Co)\\.?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": null,
+   "priority": 45,
+   "note": ""
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|\\n)[ \\t]*(?:[Hh]i|[Hh]ello|[Hh]ey|[Dd]ear|[Gg]ood (?:morning|afternoon|evening))[ ,]+([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n:]|$)",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": "greetings, in either case"
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:Mr|Mrs|Ms|Mx|Dr|Prof)\\.? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": ""
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|\\n)(?:From|To|Cc|Reply-To): *([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2}) *<",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": ""
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|\\n)[ \\t]*(?:Thanks|Thank you|Best|Regards|Best regards|Kind regards|Cheers|Sincerely|Warmly),?[ \\t]*\\n[ \\t]*([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})[ \\t]*(?=\\n|$)",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": "sign-off on its own line"
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|\\n|[.!?] )[ \\t]*(?:[Tt]hanks|[Tt]hank you|[Cc]heers),? ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})(?=[,!.\\n]| for|$)",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": "thanks inline"
+  },
+  {
+   "type": "PERSON",
+   "pattern": "\"(?:name|full_name|fullName|display_name|displayName|contact|contact_name|customer|customer_name|recipient|sender|requester|approver|owner|assignee|author|attendee|patient|client)\" ?: ?\"([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?){0,2})\"",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 40,
+   "note": "a name field in JSON (tool results)"
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?<![A-Za-z0-9_])(?:with|meet|meeting|ask|call|email|cc|tell|invite|from|for|and|by|pay|paid|text|message|ping|remind|introduce|contact|thank|reply to|send to|sent to|forward to|write to|addressed to) ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?![A-Za-z0-9_])",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 39,
+   "note": ""
+  },
+  {
+   "type": "PERSON",
+   "pattern": "(?:^|[ (])to ([A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)? [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?:[-'][A-ZÀ-ÖØ-Þ]?[a-zß-öø-ÿ]+)?)(?=,)",
+   "group": 1,
+   "flags": "",
+   "check": "name",
+   "priority": 38,
+   "note": "'to Ana Whitfield,' as in an address line"
+  }
+ ]
+}

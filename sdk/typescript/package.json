@@ -1,0 +1,64 @@
+{
+  "name": "open-pseudonym",
+  "version": "0.1.0",
+  "description": "Open Pseudonym: replace personal data with stand-ins before text goes to an AI model, and restore it afterwards. Core SDK plus a Vercel AI SDK integration.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./vercel-ai": {
+      "types": "./dist/vercel-ai/index.d.ts",
+      "default": "./dist/vercel-ai/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "conformance": "node src/conformance.ts ../../vectors"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ishan2036924/open-pseudonym.git",
+    "directory": "sdk/typescript"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/Ishan2036924/open-pseudonym",
+  "peerDependencies": {
+    "ai": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "24.19.2",
+    "ai": "7.0.148"
+  },
+  "keywords": [
+    "pseudonymization",
+    "privacy",
+    "pii",
+    "llm",
+    "ai-agents",
+    "gdpr",
+    "vercel-ai"
+  ],
+  "author": "Ishan Srivastava"
+}
