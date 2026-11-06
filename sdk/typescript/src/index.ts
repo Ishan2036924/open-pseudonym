@@ -21,4 +21,4 @@ export { StreamRestorer } from "./restore.ts";
 export { Vault, VaultError } from "./vault.ts";
 export type { Detector, Span } from "./detect.ts";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";

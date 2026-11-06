@@ -1,6 +1,6 @@
 {
   "name": "open-pseudonym",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open Pseudonym: replace personal data with stand-ins before text goes to an AI model, and restore it afterwards. Core SDK plus a Vercel AI SDK integration.",
   "license": "Apache-2.0",
   "type": "module",

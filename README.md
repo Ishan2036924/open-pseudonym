@@ -1,5 +1,7 @@
 # Open Pseudonym
 
+[![PyPI](https://img.shields.io/pypi/v/open-pseudonym)](https://pypi.org/project/open-pseudonym/) [![npm](https://img.shields.io/npm/v/open-pseudonym)](https://www.npmjs.com/package/open-pseudonym) [![ci](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Keep personal data away from AI models without making them worse at the task.**
 
 Before text reaches a model, Open Pseudonym swaps names, emails, phone numbers, dates and secrets for stand-ins

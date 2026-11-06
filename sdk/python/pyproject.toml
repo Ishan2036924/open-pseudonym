@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-pseudonym"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open Pseudonym: keep personal data away from AI models without making them worse at the task. Task-aware stand-ins, local restore, secret handles and signed egress receipts."
 readme = "README.md"
 license = "Apache-2.0"

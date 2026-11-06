@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.1 (2026-11-06)
+
+- Release check: first release through npm trusted publishing (staged, approved by a maintainer). No code changes.
+- README: install badges and links to the published packages.
+
+## 0.1.0 (2026-11-06)
 
 - Specification v0.1: detection, task policies, stand-ins, the vault, restoring, secret handles, egress receipts,
   HTTP proxy and MCP bindings, conformance levels.
