@@ -68,6 +68,9 @@
    "action": "handle",
    "uses": 1,
    "ttl_s": 600
+  },
+  "USERNAME": {
+   "action": "fake"
   }
  },
  "default": {

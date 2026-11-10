@@ -14,7 +14,8 @@ import { pools } from "./data.ts";
 import { digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
 import {
-  capitalize, escapeRegExp, isAlnumChar, isAlphaChar, isDigitChar, isLower, isUpper, lstripWs, splitWs,
+  capitalize, cmpCodePoints, cpLength, isAlnumChar, isAlphaChar, isDigitChar, isLower, isUpper, lstripWs,
+  splitWs, stripWs,
 } from "./util.ts";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -40,6 +41,18 @@ const ADDRESS_PARTS = new RegExp(
   "^([0-9]+)([A-Z]?) ([^\\n]+?) (Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Boulevard|Blvd|Way|Court|Ct|Place|Pl" +
   "|Terrace|Parkway|Pkwy|Highway|Hwy|Square|Sq)(\\.?)([^\\n]*)$");
 const URL_PARTS = /^(https?:\/\/)([^/?#:]+)(:[0-9]+)?([^\n]*)$/i;
+const INITIAL = /^[A-Z]\.$/u;
+const PARTICLES = new Set("de del della da das dos du di van von der den ter ten bin ibn al el la le zu".split(" "));
+// words that say what a company does; "Aster Field Labs" loses "Labs" before it takes a real suffix such as "Corp"
+const ORG_DESCRIPTORS = new Set(
+  ("Labs Systems Works Partners Health Analytics Logistics Media Robotics Foods Legal Learning Capital Design Co " +
+    "Energy Retail Insurance Biotech Builders Travel Bank Studio Software Freight Clinic Advisors Furniture Games").split(" "));
+const CITY_STATE = /^([^\n]+), ([A-Z]{2}|[A-Z][A-Za-z.]*(?: [A-Z][A-Za-z.]*)*)$/u;
+const POSTCODES: [string, RegExp][] = [
+  ["uk", /^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][ABD-HJLNP-UW-Z]{2}$/u],
+  ["ca", /^[ABCEGHJ-NPRSTVXY][0-9][ABCEGHJ-NPRSTV-Z] ?[0-9][ABCEGHJ-NPRSTV-Z][0-9]$/u],
+  ["us", /^[0-9]{5}(?:-[0-9]{4})?$/u],
+];
 
 /** What a maker needs besides the real value. */
 export class Ctx {
@@ -55,9 +68,19 @@ export class Ctx {
 
   free(candidate: string): boolean {
     const low = candidate.toLowerCase();
-    if (this.vault.used.has(low) || this.vault.realSeen.has(low)) return false;
-    return !new RegExp("(?<![A-Za-z0-9_])" + escapeRegExp(candidate) + "(?![A-Za-z0-9_])", "iu").test(this.text);
+    if (this.vault.used.has(low) || this.vault.realSeen.has(low) || low.length === 0) return false;
+    // is the candidate already in the text as a whole word, in any case? A plain search: compiling a regex for every
+    // candidate cost more than the rest of masking put together
+    const text = this.text.toLowerCase();
+    for (let i = text.indexOf(low); i >= 0; i = text.indexOf(low, i + 1)) {
+      if (!wordChar(text[i - 1]) && !wordChar(text[i + low.length])) return false;
+    }
+    return true;
   }
+}
+
+function wordChar(ch: string | undefined): boolean {
+  return ch !== undefined && (ch === "_" || (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9"));
 }
 
 /** Draw from a pool until we hit a free value. If the pool runs dry, pair two values with a hyphen. */
@@ -144,8 +167,16 @@ export function person(ctx: Ctx, real: string): string {
   const keepGender = "keep_gender" in ctx.options ? ctx.options.keep_gender : true;
   const out: string[] = [];
   tokens.forEach((t, i) => {
+    if (PARTICLES.has(t)) {
+      out.push(t); // "van der", "de la": part of the name's shape, not of the person
+      return;
+    }
     const key = t.toLowerCase();
     let fake = ctx.vault.parts.get(key);
+    if (fake === undefined && INITIAL.test(t)) {
+      fake = chars(ctx, "initial", UPPER, 1) + "."; // "D. Smith" -> "K. Yilmaz"
+      ctx.vault.addPart(t, fake);
+    }
     if (fake === undefined) {
       const isFirst = (tokens.length === 1 && pools().name_gender.has(key.split("-")[0])) ||
         (tokens.length > 1 && i < tokens.length - 1);
@@ -163,17 +194,147 @@ export function person(ctx: Ctx, real: string): string {
   return out.join(" ");
 }
 
-export function org(ctx: Ctx, real: string): string {
-  const fake = pick(ctx, "org", pools().orgs);
-  const m = ORG_SUFFIX.exec(real);
-  return m ? `${fake} ${m[1]}${m[2]}` : fake;
+/** The name without its legal suffix: "Acme" for "Acme Corp". */
+export function orgCore(real: string): string {
+  return stripWs(real.replace(ORG_SUFFIX, ""));
 }
 
-export function location(ctx: Ctx, _real: string): string {
+/** A bare core is worth hiding on its own only if it is long enough and not an everyday word. */
+export function orgCoreUsable(core: string): boolean {
+  return cpLength(core) >= 3 && !checks.stopwords().has(core.toLowerCase());
+}
+
+/**
+ * A fake organisation and the fake name under it. "Acme Corp" and "Acme" share one fake name, so the model sees
+ * one company: "Ferngrove Corp" and "Ferngrove".
+ */
+export function orgParts(ctx: Ctx, real: string): [string, string] {
+  const core = orgCore(real).toLowerCase();
+  let fakeCore: string | null = null;
+  for (const e of ctx.vault.entries) {
+    if (e.type === "ORG" && e.action === "fake" && orgCore(e.real).toLowerCase() === core && e.meta.core) {
+      fakeCore = e.meta.core;
+      break;
+    }
+  }
+  const m = ORG_SUFFIX.exec(real);
+  if (fakeCore === null) {
+    fakeCore = pick(ctx, "org", pools().orgs);
+    if (m) {
+      // "Aster Field Labs" plus "Corp" would read as two suffixes; drop the describing word, and use the short name
+      // for the bare company too ("Aster Field Corp", later "Aster Field")
+      const words = fakeCore.split(" ");
+      while (words.length > 1 && ORG_DESCRIPTORS.has(words[words.length - 1])) words.pop();
+      fakeCore = words.join(" ");
+    }
+  }
+  if (!m) return [fakeCore, fakeCore];
+  return [`${fakeCore} ${m[1]}${m[2]}`, fakeCore];
+}
+
+export function org(ctx: Ctx, real: string): string {
+  return orgParts(ctx, real)[0];
+}
+
+/** What the word lists know about a place: [kind, where it is], or undefined. */
+function place(real: string): [string, string] | undefined {
+  return pools().places.get(real);
+}
+
+function cityState(real: string): [string, string, string] | null {
+  const m = CITY_STATE.exec(real);
+  if (!m) return null;
+  const codes = pools().us_state_codes;
+  const state = codes.get(m[2]) ?? m[2];
+  return pools().places.has(state) || codes.has(m[2]) ? [m[1], m[2], state] : null;
+}
+
+export function location(ctx: Ctx, real: string): string {
+  const cs = cityState(real);
+  if (cs !== null) {
+    // "Smalltown, MT": a fake town, the state kept as written
+    return pick(ctx, "city", pools().cities) + ", " + cs[1];
+  }
+  const known = place(real);
+  if (known !== undefined && ["country", "state", "region"].includes(known[0])) {
+    // a country becomes another country on the same continent, a state another state: the model keeps the rough
+    // geography, which matters for time zones, travel and language
+    const [kind, where] = known;
+    const same = [...pools().places]
+      .filter(([p, [k, w]]) => k === kind && w === where && p !== real)
+      .map(([p]) => p)
+      .sort(cmpCodePoints);
+    if (same.length > 0) return pick(ctx, "place." + kind, same);
+  }
   return pick(ctx, "city", pools().cities);
 }
 
+/** Countries, states and regions are already general; describing them more coarsely would only lose meaning. */
+export function coarsePlace(real: string): boolean {
+  const known = place(real);
+  return known !== undefined && ["country", "state", "region", "place"].includes(known[0]);
+}
+
+/**
+ * A coarser description that keeps what a task usually needs: "a city in Idaho", "a town in Montana". When the text
+ * names the region right after the city ("Boise, Idaho"), the city is just "a city".
+ */
+export function generalPlace(real: string, after = ""): string {
+  const cs = cityState(real);
+  if (cs !== null) return `a ${place(cs[0]) ? "city" : "town"} in ${cs[2]}`;
+  const known = place(real);
+  if (known === undefined) return "a place";
+  const [kind, where] = known;
+  const short = where.startsWith("the ") ? where.slice(4) : where;
+  if (!where || after.startsWith(", " + short)) return `a ${kind}`;
+  return `a ${kind} in ${where}`;
+}
+
+export function postcodeKind(real: string): string | null {
+  for (const [kind, rx] of POSTCODES) if (rx.test(real)) return kind;
+  return null;
+}
+
+/** The coarse part of a postcode: the UK outward code (NW1), the first three US ZIP digits, the Canadian FSA. */
+export function postcodeArea(real: string): string | null {
+  const kind = postcodeKind(real);
+  if (kind === "uk") return splitWs(real)[0];
+  if (kind === "us") return real.slice(0, 3) + "xx";
+  if (kind === "ca") return real.slice(0, 3);
+  return null;
+}
+
+/**
+ * Postcodes from ranges no real address uses: UK ZZ99 (the NHS code for 'no fixed address'), US ZIPs starting 000
+ * (never assigned), Canadian codes starting with Z (no such region).
+ */
+function postcode(ctx: Ctx, real: string, kind: string): string {
+  for (let i = 0; i < 200; i++) {
+    let fake: string;
+    if (kind === "uk") {
+      fake = "ZZ99 " + chars(ctx, "postcode", DIGITS, 1) + chars(ctx, "postcode", "ABDEFGHJLNPQRSTUWXYZ", 2);
+    } else if (kind === "us") {
+      fake = "000" + chars(ctx, "postcode", DIGITS, 2);
+      if (real.includes("-")) fake += "-" + chars(ctx, "postcode", DIGITS, 4);
+    } else {
+      const space = real.includes(" ") ? " " : "";
+      fake = "Z" + chars(ctx, "postcode", DIGITS, 1);
+      fake += chars(ctx, "postcode", "ABCEGHJKLMNPRSTVWXYZ", 1) + space;
+      fake += chars(ctx, "postcode", DIGITS, 1);
+      fake += chars(ctx, "postcode", "ABCEGHJKLMNPRSTVWXYZ", 1);
+      fake += chars(ctx, "postcode", DIGITS, 1);
+    }
+    if (fake !== real && ctx.free(fake)) {
+      ctx.vault.used.add(fake.toLowerCase());
+      return fake;
+    }
+  }
+  throw new Error("ran out of fake postcodes");
+}
+
 export function address(ctx: Ctx, real: string): string {
+  const kind = postcodeKind(real);
+  if (kind !== null) return postcode(ctx, real, kind);
   const m = ADDRESS_PARTS.exec(real);
   const street = pick(ctx, "street", pools().streets);
   if (!m) return `${1 + ctx.vault.drbg.below("addr.num", 999)} ${street} St`;
@@ -216,6 +377,17 @@ export function email(ctx: Ctx, real: string, onPerson?: (fullName: string) => v
     if (onPerson) onPerson(full);
     else person(new Ctx(ctx.vault, ctx.text, {}), full);
   }
+  const body = localRuns(ctx, runs).join("");
+  let fake = body + "@" + domain(ctx, host);
+  for (let i = 0; i < 100; i++) {
+    if (ctx.free(fake)) return fake;
+    fake = body + chars(ctx, "digits", DIGITS, 1) + "@" + domain(ctx, host);
+  }
+  throw new Error("could not make a free fake email address");
+}
+
+/** Fake words for the pieces of a mailbox or a handle. Name parts we know keep their fake ("dana" -> "maya"). */
+function localRuns(ctx: Ctx, runs: string[]): string[] {
   const out: string[] = [];
   for (const r of runs) {
     if (isAlphaChar(r)) {
@@ -231,13 +403,20 @@ export function email(ctx: Ctx, real: string, onPerson?: (fullName: string) => v
       out.push(r);
     }
   }
-  const body = out.join("");
-  let fake = body + "@" + domain(ctx, host);
+  return out;
+}
+
+/** @dana_r -> @maya_q: same shape, words swapped, digits redrawn. */
+export function username(ctx: Ctx, real: string): string {
+  const runs = real.slice(1).match(/[A-Za-z]+|[0-9]+|[^A-Za-z0-9]/gu) ?? [];
   for (let i = 0; i < 100; i++) {
-    if (ctx.free(fake)) return fake;
-    fake = body + chars(ctx, "digits", DIGITS, 1) + "@" + domain(ctx, host);
+    const fake = "@" + localRuns(ctx, runs).join("");
+    if (fake.toLowerCase() !== real.toLowerCase() && ctx.free(fake)) {
+      ctx.vault.used.add(fake.toLowerCase());
+      return fake;
+    }
   }
-  throw new Error("could not make a free fake email address");
+  throw new Error("could not make a free fake handle");
 }
 
 export function phone(ctx: Ctx, real: string): string {
@@ -285,15 +464,43 @@ export function url(ctx: Ctx, real: string): string {
   const out: string[] = [];
   let afterEquals = false;
   const nameParts = [...ctx.vault.parts.keys()].filter((p) => [...p].length >= 3);
-  for (const tok of restTokens) {
+  const data = pools();
+  // on a profile site (linkedin.com/in/<person>, github.com/<person>) every path word names someone, except the
+  // site's own words such as "in" or "status"
+  const profile = data.profile_hosts.includes(registrable(m[2]));
+  const structural = new Set(data.profile_path_words);
+  const named = segmentsWithNames(m[4], data.name_gender);
+  restTokens.forEach((tok, i) => {
     const low = tok.toLowerCase();
     // a slug like /in/danareyes carries a name even without separators, so look inside each piece
     const interesting = afterEquals || [...tok].length >= 12 || [...tok].some(isDigitChar) ||
-      nameParts.some((part) => low.includes(part));
+      nameParts.some((part) => low.includes(part)) ||
+      (profile && !structural.has(low) && inPath(restTokens, i)) || tokenIn(named, restTokens, i);
     out.push(isAlnumChar(tok) && interesting ? shape(ctx, tok, "url") : tok);
     afterEquals = tok === "=";
-  }
+  });
   return m[1] + domain(ctx, m[2]) + (m[3] ?? "") + out.join("");
+}
+
+/** True while we are still in the path, before any ? or #. */
+function inPath(tokens: string[], i: number): boolean {
+  return !tokens.slice(0, i).some((t) => t === "?" || t === "#");
+}
+
+/** Indexes of path segments ("/team/dana-reyes") that hold a given name; the whole segment is personal then. */
+function segmentsWithNames(rest: string, given: Map<string, string>): Set<number> {
+  const path = rest.split(/[?#]/u)[0];
+  const out = new Set<number>();
+  path.split("/").forEach((seg, n) => {
+    const words = seg.match(/[A-Za-z]+/gu) ?? [];
+    if (words.some((w) => w.length >= 3 && given.has(w.toLowerCase()))) out.add(n);
+  });
+  return out;
+}
+
+function tokenIn(named: Set<number>, tokens: string[], i: number): boolean {
+  if (named.size === 0 || !inPath(tokens, i)) return false;
+  return named.has(tokens.slice(0, i).filter((t) => t === "/").length);
 }
 
 export function ipAddress(ctx: Ctx, _real: string): string {
@@ -379,6 +586,7 @@ type Maker = (ctx: Ctx, real: string) => string;
 
 const MAKERS = new Map<string, Maker>([
   ["PERSON", person],
+  ["USERNAME", username],
   ["ORG", org],
   ["LOCATION", location],
   ["ADDRESS", address],

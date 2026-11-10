@@ -24,9 +24,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
 from . import dates, fakes, handles
-from .checks import aba_ok, luhn_ok, ssn_ok
-from .detect import KnownDetector, PatternDetector, Span, resolve
-from .egress import EgressLeak, EgressLog, Leak, check as egress_check, known_mode
+from .checks import aba_ok, ambiguous_names, cue_only, luhn_ok, ssn_ok, stopwords
+from .detect import KnownDetector, PatternDetector, Span, grow_names, resolve, resolve_people
+from .egress import EgressLeak, EgressLog, Leak, blank_stand_ins, check as egress_check, known_mode
 from .fakes import Ctx, fill_template
 from .fpe import FF1
 from .handles import HANDLE, HandleRefused, Sink, Source
@@ -159,6 +159,7 @@ class Session:
         self.masked_input = masked_input
         self._patterns = PatternDetector(extra_patterns, dayfirst, self._year)
         self._known_cache: tuple[int, KnownDetector] | None = None
+        self._known_forms: tuple[tuple, KnownDetector] | None = None
         self._restorer_cache: Restorer | None = None
 
     # Small helpers
@@ -176,9 +177,7 @@ class Session:
         if self._known_cache and self._known_cache[0] == self.vault.version:
             return self._known_cache[1]
         forms = []
-        from ._data import pools as _pools
-
-        stop_words = {w.lower() for w in _pools()["name_stopwords"]}
+        stop_words = stopwords() | ambiguous_names()  # parts that are also words are never searched for alone
         for t, values in self.known.items():
             for v in values:
                 forms.append((t, v, known_mode(t, v)))
@@ -189,17 +188,21 @@ class Session:
             if e.type in ("DATE", "MONEY"):
                 continue  # the patterns find these again, and their stand-ins depend on the format
             for real in set(e.surfaces.values()):
+                if cue_only(e.type, real):
+                    continue
                 if e.type in DIGIT_TYPES and len(digits_of(real)) >= 6:
                     forms.append((e.type, digits_of(real), "digits"))
                 else:
                     forms.append((e.type, real, known_mode(e.type, real)))
-        from ._data import pools
-
-        stop = {w.lower() for w in pools()["name_stopwords"]}
         for real_part in self.vault.parts_back.values():
-            if len(real_part) >= 2 and real_part.lower() not in stop:
+            if len(real_part) >= 2 and real_part.lower() not in stop_words:
                 forms.append(("PERSON", real_part, "case"))
-        det = KnownDetector(forms)
+        key = tuple(forms)
+        if self._known_forms is not None and self._known_forms[0] == key:
+            det = self._known_forms[1]  # the vault changed, but not in anything we search for
+        else:
+            det = KnownDetector(forms)
+            self._known_forms = (key, det)
         self._known_cache = (self.vault.version, det)
         return det
 
@@ -216,7 +219,7 @@ class Session:
         spans = self._patterns.detect(text) + self._known_detector().detect(text)
         for d in self.extra_detectors:
             spans.extend(d.detect(text))
-        chosen = resolve(spans)
+        chosen = grow_names(resolve_people(spans), text)
         return [s for s in chosen if s.text.lower() not in self.allow and not self._is_ours(s.text)]
 
     def _is_ours(self, text: str) -> bool:
@@ -234,7 +237,7 @@ class Session:
                 stand[span] = self._stand_in(span, text, source)
             # what we just learned (a name, its parts) may appear elsewhere in this same text without a cue,
             # like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
-            todo = [sp for sp in resolve(self._known_detector().detect(text))
+            todo = [sp for sp in grow_names(resolve(self._known_detector().detect(text)), text)
                     if not any(sp.start < o.end and o.start < sp.end for o in spans)
                     and sp.text.lower() not in self.allow and not self._is_ours(sp.text)]
             if not todo:
@@ -263,10 +266,24 @@ class Session:
         out.append(text[last:])
         return Masked("".join(out), reps, notes)
 
+    def _kept(self, span: Span, text: str) -> bool:
+        """True when this mention stays as written. The masking and the egress check both ask here, so a value we
+        chose to keep is never reported as a leak."""
+        action = self.policy.rule_for(span.type).action
+        if action == "keep":
+            return True
+        if span.type == "DATE" and action in ("shift", "fake") and dates.near_holiday(text, span.start, span.end):
+            # "Christmas Day, December 25": the words already give the date away, and a shifted day would contradict
+            # them
+            return dates.parse(span.text, self._year(), self.dayfirst) is not None
+        if span.type == "LOCATION" and action == "generalize" and fakes.coarse_place(span.text):
+            return True  # a country or a state is already general
+        return False
+
     def _stand_in(self, span: Span, text: str, source: Source | None) -> tuple[str, Entry] | None:
         rule = self.policy.rule_for(span.type)
         action, type_ = rule.action, span.type
-        if action == "keep":
+        if self._kept(span, text):
             return None
         if action == "refuse":
             raise RefusedData(type_)
@@ -303,7 +320,7 @@ class Session:
         elif a == "fake" and t == "MONEY":
             value = self._money_scaled(span.text)
         elif a == "generalize":
-            value = self._generalize(t, span.text, parsed)
+            value = self._generalize(t, span.text, parsed, text[span.end:span.end + 40])
         else:
             value = entry.stand_in
         self.vault.add_surface(entry, value, span.text)
@@ -319,10 +336,19 @@ class Session:
                 value = self._money_scaled(real)
             elif type_ == "EMAIL":
                 value = fakes.email(ctx, real, on_person=lambda full: self._person_from_email(full, text))
+            elif type_ == "ORG":
+                value, core = fakes.org_parts(ctx, real)
+                meta = {"core": core}
             else:
                 value = fakes.make(type_, ctx, real)
         elif action == "shift":
-            shifted = parsed.day + dt.timedelta(days=self.vault.get_date_offset())
+            offset = self.vault.get_date_offset()
+            if parsed.has_year and dates.near_birth(text, span.start):
+                # a birth date moves the other way if the usual shift would change the person's age today
+                today = dt.datetime.fromtimestamp(self.now(), dt.timezone.utc).date()
+                if dates.age(parsed.day, today) != dates.age(parsed.day + dt.timedelta(days=offset), today):
+                    offset = -offset
+            shifted = parsed.day + dt.timedelta(days=offset)
             value = dates.render(shifted, parsed)
             meta = {"day": parsed.day.isoformat(), "shifted": shifted.isoformat()}
         elif action == "tag":
@@ -333,7 +359,7 @@ class Session:
         elif action == "fpe":
             value = self._fpe(type_, real)
         elif action == "generalize":
-            value = self._generalize(type_, real, parsed)
+            value = self._generalize(type_, real, parsed, text[span.end:span.end + 40])
         elif action == "drop":
             value = f"[{type_} removed]"
         elif action == "handle":
@@ -342,11 +368,20 @@ class Session:
         else:  # pragma: no cover - policy validation keeps us out of here
             raise ValueError(f"unknown action {action!r}")
         entry = self.vault.add(type_, real, norm, action, value, restorable, meta)
+        if type_ == "ORG" and action == "fake":
+            real_core = fakes.org_core(real)
+            if real_core != real and fakes.org_core_usable(real_core):
+                # the bare name is known from now on, so "work at Acme" is hidden like "Acme Corp" was
+                self.vault.add_surface(entry, meta["core"], real_core)
         return value, entry
 
     def _person_from_email(self, full_name: str, text: str) -> None:
         """An address like dana.reyes@ names a person; give them the same fake name everywhere."""
         rule = self.policy.rule_for("PERSON")
+        if rule.action == "keep":
+            # names stay visible under this policy, so the address gets plain fake words; registering the name's
+            # parts would make the egress check treat the visible name as a leak
+            return
         norm = normalize("PERSON", full_name)
         if rule.action == "fake" and self.vault.find("PERSON", norm, "fake") is None:
             value = fakes.person(Ctx(self.vault, text, rule.options), full_name)
@@ -432,7 +467,7 @@ class Session:
             return real
         return _format_money(cents * self.vault.get_money_factor(), fmt)
 
-    def _generalize(self, type_: str, real: str, parsed) -> str:
+    def _generalize(self, type_: str, real: str, parsed, after: str = "") -> str:
         if type_ == "DATE":
             if parsed is None:
                 return "a date"
@@ -447,6 +482,12 @@ class Session:
                 step = 10 ** (len(str(dollars)) - 2)
                 dollars = (dollars + step // 2) // step * step
             return "about " + _format_money(dollars * 100, {**fmt, "decimals": False})
+        if type_ == "LOCATION":
+            return fakes.general_place(real, after)
+        if type_ == "ADDRESS":
+            area = fakes.postcode_area(real)
+            if area is not None:
+                return area
         return GENERAL.get(type_, f"[{type_}]")
 
     # JSON and chat messages
@@ -632,10 +673,14 @@ class Session:
     def check_egress(self, payload: bytes | str) -> list[Leak]:
         """Two checks on the exact bytes about to leave: every real value the vault knows, and a fresh detection pass
         over the content fields, so a field that was never masked (a document, a metadata note) is caught too."""
-        leaks = egress_check(self.vault, payload, self.restorer())
+        restorer = self.restorer()
+        leaks = egress_check(self.vault, payload, restorer)
         seen = {(lk.type, lk.entry_id) for lk in leaks}
-        for span in self.detect(content_text(payload)):
-            if self.policy.rule_for(span.type).action != "keep" and not self.vault.is_stand_in(span.text):
+        text = content_text(payload)
+        # our own stand-ins are blanked first, so a slice of a fake ("Rowan Whitlock" inside "Taylor Rowan Whitlock")
+        # is not taken for a new name
+        for span in self.detect(blank_stand_ins(text, restorer)):
+            if not self._kept(span, text) and not self.vault.is_stand_in(span.text):
                 if (span.type, "detected") not in seen:
                     seen.add((span.type, "detected"))
                     leaks.append(Leak(span.type, "detected"))

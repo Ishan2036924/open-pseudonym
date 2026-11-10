@@ -31,7 +31,8 @@ class FakePresidio:
 
 def test_gliner_finds_lower_case_names_the_patterns_miss():
     plain = Session("strict", Vault(seed=bytes(32)))
-    assert not plain.detect(TEXT)
+    # the rules know "Lisbon" from the place list, but a lower-case name is beyond them
+    assert [(sp.type, sp.text) for sp in plain.detect(TEXT)] == [("LOCATION", "Lisbon")]
     s = Session("strict", Vault(seed=bytes(32)), detectors=[GlinerDetector(FakeGliner())])
     assert [(sp.type, sp.text) for sp in s.detect(TEXT)] == [
         ("PERSON", "priya raman"), ("LOCATION", "Lisbon"), ("ORG", "Northwind")]

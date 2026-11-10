@@ -62,6 +62,9 @@
   },
   "OTP": {
    "action": "drop"
+  },
+  "USERNAME": {
+   "action": "fake"
   }
  },
  "default": {

@@ -44,6 +44,19 @@ ADDRESS_PARTS = re.compile(
     r"|Terrace|Parkway|Pkwy|Highway|Hwy|Square|Sq)(\.?)(.*)$"
 )
 URL_PARTS = re.compile(r"^(https?://)([^/?#:]+)(:[0-9]+)?(.*)$", re.IGNORECASE)
+INITIAL = re.compile(r"[A-Z]\.")
+PARTICLES = frozenset("de del della da das dos du di van von der den ter ten bin ibn al el la le zu".split())
+# words that say what a company does; "Aster Field Labs" loses "Labs" before it takes a real suffix such as "Corp"
+ORG_DESCRIPTORS = frozenset(
+    "Labs Systems Works Partners Health Analytics Logistics Media Robotics Foods Legal Learning Capital Design Co "
+    "Energy Retail Insurance Biotech Builders Travel Bank Studio Software Freight Clinic Advisors Furniture Games".split()
+)
+CITY_STATE = re.compile(r"^(.+), ([A-Z]{2}|[A-Z][A-Za-z.]*(?: [A-Z][A-Za-z.]*)*)$")
+POSTCODES = {
+    "uk": re.compile(r"[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][ABD-HJLNP-UW-Z]{2}"),
+    "ca": re.compile(r"[ABCEGHJ-NPRSTVXY][0-9][ABCEGHJ-NPRSTV-Z] ?[0-9][ABCEGHJ-NPRSTV-Z][0-9]"),
+    "us": re.compile(r"[0-9]{5}(?:-[0-9]{4})?"),
+}
 
 
 @dataclass
@@ -56,10 +69,23 @@ class Ctx:
 
     def free(self, candidate: str) -> bool:
         low = candidate.lower()
-        if low in self.vault.used or low in self.vault.real_seen:
+        if low in self.vault.used or low in self.vault.real_seen or not low:
             return False
-        return re.search(r"(?<![A-Za-z0-9_])" + re.escape(candidate) + r"(?![A-Za-z0-9_])", self.text,
-                         re.IGNORECASE) is None
+        # is the candidate already in the text as a whole word, in any case? A plain search: compiling a regex for
+        # every candidate cost more than the rest of masking put together
+        text = self.text.lower()
+        i = text.find(low)
+        while i >= 0:
+            before = text[i - 1] if i > 0 else ""
+            after = text[i + len(low)] if i + len(low) < len(text) else ""
+            if not _word_char(before) and not _word_char(after):
+                return False
+            i = text.find(low, i + 1)
+        return True
+
+
+def _word_char(ch: str) -> bool:
+    return ch != "" and (ch == "_" or "a" <= ch <= "z" or "0" <= ch <= "9")
 
 
 def pick(ctx: Ctx, label: str, pool: list[str]) -> str:
@@ -151,8 +177,14 @@ def person(ctx: Ctx, real: str) -> str:
     keep_gender = ctx.options.get("keep_gender", True)
     out = []
     for i, t in enumerate(tokens):
+        if t in PARTICLES:
+            out.append(t)  # "van der", "de la": part of the name's shape, not of the person
+            continue
         key = t.lower()
         fake = ctx.vault.parts.get(key)
+        if fake is None and INITIAL.fullmatch(t):
+            fake = chars(ctx, "initial", UPPER, 1) + "."  # "D. Smith" -> "K. Yilmaz"
+            ctx.vault.add_part(t, fake)
         if fake is None:
             is_first = (len(tokens) == 1 and key.split("-")[0] in pools()["name_gender"]) or (
                 len(tokens) > 1 and i < len(tokens) - 1
@@ -168,17 +200,138 @@ def person(ctx: Ctx, real: str) -> str:
     return " ".join(out)
 
 
-def org(ctx: Ctx, real: str) -> str:
-    fake = pick(ctx, "org", pools()["orgs"])
+def org_core(real: str) -> str:
+    """The name without its legal suffix: "Acme" for "Acme Corp"."""
+    return ORG_SUFFIX.sub("", real).strip()
+
+
+def org_core_usable(core: str) -> bool:
+    """A bare core is worth hiding on its own only if it is long enough and not an everyday word."""
+    return len(core) >= 3 and core.lower() not in checks.stopwords()
+
+
+def org_parts(ctx: Ctx, real: str) -> tuple[str, str]:
+    """A fake organisation and the fake name under it. "Acme Corp" and "Acme" share one fake name, so the model
+    sees one company: "Ferngrove Corp" and "Ferngrove"."""
+    core = org_core(real).lower()
+    fake_core = None
+    for e in ctx.vault.entries:
+        if e.type == "ORG" and e.action == "fake" and org_core(e.real).lower() == core and e.meta.get("core"):
+            fake_core = e.meta["core"]
+            break
     m = ORG_SUFFIX.search(real)
-    return f"{fake} {m[1]}{m[2]}" if m else fake
+    if fake_core is None:
+        fake_core = pick(ctx, "org", pools()["orgs"])
+        if m:
+            # "Aster Field Labs" plus "Corp" would read as two suffixes; drop the describing word, and use the short
+            # name for the bare company too ("Aster Field Corp", later "Aster Field")
+            words = fake_core.split()
+            while len(words) > 1 and words[-1] in ORG_DESCRIPTORS:
+                words.pop()
+            fake_core = " ".join(words)
+    if not m:
+        return fake_core, fake_core
+    return f"{fake_core} {m[1]}{m[2]}", fake_core
+
+
+def org(ctx: Ctx, real: str) -> str:
+    return org_parts(ctx, real)[0]
+
+
+def _place(real: str):
+    """What the word lists know about a place: (kind, where it is), or None."""
+    return pools()["places"].get(real)
+
+
+def _city_state(real: str):
+    m = CITY_STATE.match(real)
+    if not m:
+        return None
+    codes = pools()["us_state_codes"]
+    state = codes.get(m[2], m[2])
+    return (m[1], m[2], state) if state in pools()["places"] or m[2] in codes else None
 
 
 def location(ctx: Ctx, real: str) -> str:
+    cs = _city_state(real)
+    if cs is not None:
+        # "Smalltown, MT": a fake town, the state kept as written
+        return pick(ctx, "city", pools()["cities"]) + ", " + cs[1]
+    known = _place(real)
+    if known is not None and known[0] in ("country", "state", "region"):
+        # a country becomes another country on the same continent, a state another state: the model keeps the
+        # rough geography, which matters for time zones, travel and language
+        kind, where = known
+        same = sorted(p for p, (k, w) in pools()["places"].items() if k == kind and w == where and p != real)
+        if same:
+            return pick(ctx, "place." + kind, same)
     return pick(ctx, "city", pools()["cities"])
 
 
+def coarse_place(real: str) -> bool:
+    """Countries, states and regions are already general; describing them more coarsely would only lose meaning."""
+    known = _place(real)
+    return known is not None and known[0] in ("country", "state", "region", "place")
+
+
+def general_place(real: str, after: str = "") -> str:
+    """A coarser description that keeps what a task usually needs: "a city in Idaho", "a town in Montana". When the
+    text names the region right after the city ("Boise, Idaho"), the city is just "a city"."""
+    cs = _city_state(real)
+    if cs is not None:
+        return f"a {'city' if _place(cs[0]) else 'town'} in {cs[2]}"
+    known = _place(real)
+    if known is None:
+        return "a place"
+    kind, where = known
+    if not where or after.startswith(", " + where.removeprefix("the ")):
+        return f"a {kind}"
+    return f"a {kind} in {where}"
+
+
+def postcode_kind(real: str) -> str | None:
+    for kind, rx in POSTCODES.items():
+        if rx.fullmatch(real):
+            return kind
+    return None
+
+
+def postcode_area(real: str) -> str | None:
+    """The coarse part of a postcode: the UK outward code (NW1), the first three US ZIP digits, the Canadian FSA."""
+    kind = postcode_kind(real)
+    if kind == "uk":
+        return real.split()[0]
+    if kind == "us":
+        return real[:3] + "xx"
+    if kind == "ca":
+        return real[:3]
+    return None
+
+
+def postcode(ctx: Ctx, real: str, kind: str) -> str:
+    """Postcodes from ranges no real address uses: UK ZZ99 (the NHS code for 'no fixed address'), US ZIPs starting
+    000 (never assigned), Canadian codes starting with Z (no such region)."""
+    for _ in range(200):
+        if kind == "uk":
+            fake = "ZZ99 " + chars(ctx, "postcode", DIGITS, 1) + chars(ctx, "postcode", "ABDEFGHJLNPQRSTUWXYZ", 2)
+        elif kind == "us":
+            fake = "000" + chars(ctx, "postcode", DIGITS, 2) + ("-" + chars(ctx, "postcode", DIGITS, 4)
+                                                               if "-" in real else "")
+        else:
+            space = " " if " " in real else ""
+            fake = ("Z" + chars(ctx, "postcode", DIGITS, 1) + chars(ctx, "postcode", "ABCEGHJKLMNPRSTVWXYZ", 1) + space
+                    + chars(ctx, "postcode", DIGITS, 1) + chars(ctx, "postcode", "ABCEGHJKLMNPRSTVWXYZ", 1)
+                    + chars(ctx, "postcode", DIGITS, 1))
+        if fake != real and ctx.free(fake):
+            ctx.vault.used.add(fake.lower())
+            return fake
+    raise RuntimeError("ran out of fake postcodes")
+
+
 def address(ctx: Ctx, real: str) -> str:
+    kind = postcode_kind(real)
+    if kind is not None:
+        return postcode(ctx, real, kind)
     m = ADDRESS_PARTS.match(real)
     street = pick(ctx, "street", pools()["streets"])
     if not m:
@@ -221,6 +374,17 @@ def email(ctx: Ctx, real: str, on_person=None) -> str:
             on_person(full)
         else:
             person(Ctx(ctx.vault, ctx.text, {}), full)
+    out = _local_runs(ctx, runs)
+    fake = "".join(out) + "@" + domain(ctx, host)
+    for _ in range(100):
+        if ctx.free(fake):
+            return fake
+        fake = "".join(out) + chars(ctx, "digits", DIGITS, 1) + "@" + domain(ctx, host)
+    raise RuntimeError("could not make a free fake email address")
+
+
+def _local_runs(ctx: Ctx, runs: list[str]) -> list[str]:
+    """Fake words for the pieces of a mailbox or a handle. Name parts we know keep their fake ("dana" -> "maya")."""
     out = []
     for r in runs:
         if r[0].isalpha():
@@ -237,12 +401,18 @@ def email(ctx: Ctx, real: str, on_person=None) -> str:
             out.append(chars(ctx, "digits", DIGITS, len(r)))
         else:
             out.append(r)
-    fake = "".join(out) + "@" + domain(ctx, host)
+    return out
+
+
+def username(ctx: Ctx, real: str) -> str:
+    """@dana_r -> @maya_q: same shape, words swapped, digits redrawn."""
+    runs = re.findall(r"[A-Za-z]+|[0-9]+|[^A-Za-z0-9]", real[1:])
     for _ in range(100):
-        if ctx.free(fake):
+        fake = "@" + "".join(_local_runs(ctx, runs))
+        if fake.lower() != real.lower() and ctx.free(fake):
+            ctx.vault.used.add(fake.lower())
             return fake
-        fake = "".join(out) + chars(ctx, "digits", DIGITS, 1) + "@" + domain(ctx, host)
-    raise RuntimeError("could not make a free fake email address")
+    raise RuntimeError("could not make a free fake handle")
 
 
 def phone(ctx: Ctx, real: str) -> str:
@@ -283,16 +453,47 @@ def url(ctx: Ctx, real: str) -> str:
     rest_tokens = re.findall(r"[A-Za-z0-9]+|[^A-Za-z0-9]", m[4])
     out, after_equals = [], False
     name_parts = [p for p in ctx.vault.parts if len(p) >= 3]
-    for tok in rest_tokens:
+    data = pools()
+    given = data["name_gender"]
+    # on a profile site (linkedin.com/in/<person>, github.com/<person>) every path word names someone, except the
+    # site's own words such as "in" or "status"
+    profile = registrable(m[2]) in data["profile_hosts"]
+    structural = set(data["profile_path_words"])
+    named = _segments_with_names(m[4], given)
+    for i, tok in enumerate(rest_tokens):
         low = tok.lower()
         # a slug like /in/danareyes carries a name even without separators, so look inside each piece
         if tok[0].isalnum() and (after_equals or len(tok) >= 12 or any(c.isdigit() for c in tok)
-                                 or any(part in low for part in name_parts)):
+                                 or any(part in low for part in name_parts)
+                                 or (profile and low not in structural and _in_path(rest_tokens, i))
+                                 or _token_in(named, rest_tokens, i)):
             out.append(shape(ctx, tok, "url"))
         else:
             out.append(tok)
         after_equals = tok == "="
     return m[1] + domain(ctx, m[2]) + (m[3] or "") + "".join(out)
+
+
+def _in_path(tokens: list[str], i: int) -> bool:
+    """True while we are still in the path, before any ? or #."""
+    return not any(t in ("?", "#") for t in tokens[:i])
+
+
+def _segments_with_names(rest: str, given: dict) -> set[int]:
+    """Indexes of path segments ("/team/dana-reyes") that hold a given name; the whole segment is personal then."""
+    path = re.split(r"[?#]", rest, maxsplit=1)[0]
+    out = set()
+    for n, seg in enumerate(path.split("/")):
+        words = re.findall(r"[A-Za-z]+", seg)
+        if any(len(w) >= 3 and w.lower() in given for w in words):
+            out.add(n)
+    return out
+
+
+def _token_in(named: set[int], tokens: list[str], i: int) -> bool:
+    if not named or not _in_path(tokens, i):
+        return False
+    return tokens[:i].count("/") in named
 
 
 def ip_address(ctx: Ctx, real: str) -> str:
@@ -374,6 +575,7 @@ def secret_shape(ctx: Ctx, real: str, label: str) -> str:
 
 MAKERS = {
     "PERSON": person,
+    "USERNAME": username,
     "ORG": org,
     "LOCATION": location,
     "ADDRESS": address,

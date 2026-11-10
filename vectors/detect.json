@@ -68,6 +68,10 @@
    "text": "meet in New York with Priya Raman at 221 Baker Street, Apt 4 for $1,234.50",
    "spans": [
     [
+     "LOCATION",
+     "New York"
+    ],
+    [
      "PERSON",
      "Priya Raman"
     ],
@@ -93,6 +97,10 @@
     [
      "ROUTING",
      "021000021"
+    ],
+    [
+     "ID",
+     "123456789"
     ],
     [
      "URL",
@@ -165,6 +173,193 @@
     [
      "ADDRESS",
      "48 Harbor Road"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "I met Priya yesterday; Sam Patel and Wei Zhang joined. Daniel J. Smith signed.",
+   "spans": [
+    [
+     "PERSON",
+     "Priya"
+    ],
+    [
+     "PERSON",
+     "Sam Patel"
+    ],
+    [
+     "PERSON",
+     "Wei Zhang"
+    ],
+    [
+     "PERSON",
+     "Daniel J. Smith"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Notes from Nguyễn Văn An and Zhang Wei: Will you join? May 5 works.",
+   "spans": [
+    [
+     "PERSON",
+     "Nguyễn Văn An"
+    ],
+    [
+     "PERSON",
+     "Zhang Wei"
+    ],
+    [
+     "DATE",
+     "May 5"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Ms. Reyes called. Dana Reyes wants a refund.",
+   "spans": [
+    [
+     "PERSON",
+     "Reyes"
+    ],
+    [
+     "PERSON",
+     "Dana Reyes"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Morgan Stanley hired Morgan Lee at Bank of America.",
+   "spans": [
+    [
+     "ORG",
+     "Morgan Stanley"
+    ],
+    [
+     "PERSON",
+     "Morgan Lee"
+    ],
+    [
+     "ORG",
+     "Bank of America"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Patient MRN 448812 was seen at St. Mary's Hospital in Boise, Idaho; order #A12345 for CUST-00921 (ISO-8601, CVE-2024-12345).",
+   "spans": [
+    [
+     "ID",
+     "448812"
+    ],
+    [
+     "ORG",
+     "St. Mary's Hospital"
+    ],
+    [
+     "LOCATION",
+     "Boise"
+    ],
+    [
+     "LOCATION",
+     "Idaho"
+    ],
+    [
+     "ID",
+     "A12345"
+    ],
+    [
+     "ID",
+     "CUST-00921"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "She lives in Austin, works with Austin Lee, and moved to Smalltown, MT 59801.",
+   "spans": [
+    [
+     "LOCATION",
+     "Austin"
+    ],
+    [
+     "PERSON",
+     "Austin Lee"
+    ],
+    [
+     "LOCATION",
+     "Smalltown, MT"
+    ],
+    [
+     "ADDRESS",
+     "59801"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Offices in London NW1 6XE and Ottawa K1A 0B1.",
+   "spans": [
+    [
+     "LOCATION",
+     "London"
+    ],
+    [
+     "ADDRESS",
+     "NW1 6XE"
+    ],
+    [
+     "LOCATION",
+     "Ottawa"
+    ],
+    [
+     "ADDRESS",
+     "K1A 0B1"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Ping @dana_r or <@U12345>; the decorator @property stays. Email dana@acme.com.",
+   "spans": [
+    [
+     "USERNAME",
+     "@dana_r"
+    ],
+    [
+     "USERNAME",
+     "@U12345"
+    ],
+    [
+     "EMAIL",
+     "dana@acme.com"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "Hola María, see https://linkedin.com/in/dana-reyes today.",
+   "spans": [
+    [
+     "PERSON",
+     "María"
+    ],
+    [
+     "URL",
+     "https://linkedin.com/in/dana-reyes"
     ]
    ]
   }

@@ -51,6 +51,7 @@ Things to know:
   `approve(handle, description, sink)` callback to the `Session` that asks the person, or the fill is refused.
 - Levels: `loadLevel(1 | 2 | 3)` gives the policy for a simple privacy switch (1 Secrets, 2 Contacts, 3 Everything),
   and `LEVELS` holds the labels and one-line explanations to show people. Secrets are hidden at every level.
+  `policyFor("schedule", 2)` combines a task's profile with a person's level; the level can only add hiding.
 - Chat history and JSON: `maskMessages`, `maskJson`, `maskValue`, `restoreJson`.
 - The vault: `session.vault.save(path, key)` and `Vault.load(path, key)` use AES-256-GCM with a 32-byte key you keep.
 - Proof: `session.checkEgress(payload)` looks for any real value the vault knows in the exact bytes you are about to

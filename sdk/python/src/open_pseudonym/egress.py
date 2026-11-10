@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._data import pools
+from .checks import ambiguous_names, cue_only, stopwords
 from .detect import KnownDetector
 from .jcs import digest
 from .jws import SignatureError, Signer, verify
@@ -77,6 +77,8 @@ def real_forms(vault: Vault) -> list[tuple[str, str, str]]:
         if e.action == "keep":
             continue
         for real in set(e.surfaces.values()) | {e.real}:
+            if cue_only(e.type, real):
+                continue
             if e.type == "IBAN":
                 forms.append((e.type, real, "nocase"))
                 forms.append((e.type, "".join(real.split()), "nocase"))
@@ -86,7 +88,7 @@ def real_forms(vault: Vault) -> list[tuple[str, str, str]]:
                 forms.append((e.type, d, "digits") if len(d) >= 6 else (e.type, real, "case"))
             elif len(real) >= 2:
                 forms.append((e.type, real, known_mode(e.type, real)))
-    stop = {w.lower() for w in pools()["name_stopwords"]}
+    stop = stopwords() | ambiguous_names()
     for real_part in vault.parts_back.values():
         # stopword parts ("May") are never masked on their own, so searching for them would only raise false alarms
         if len(real_part) >= 3 and real_part.lower() not in stop:
@@ -94,15 +96,20 @@ def real_forms(vault: Vault) -> list[tuple[str, str, str]]:
     return forms
 
 
-def check(vault: Vault, payload: bytes | str, restorer: Restorer | None = None) -> list[Leak]:
-    text = payload_text(payload)
-    restorer = restorer or Restorer(vault)
-    # blank out our own stand-ins first, so a fake that happens to equal a real value elsewhere is not a false alarm
+def blank_stand_ins(text: str, restorer: Restorer) -> str:
+    """The text with our own stand-ins replaced by spaces (same length, so positions still line up)."""
     chars = list(text)
     for m in restorer.matches(text):
         for i in range(m.start, m.end):
             chars[i] = " "
-    blanked = "".join(chars)
+    return "".join(chars)
+
+
+def check(vault: Vault, payload: bytes | str, restorer: Restorer | None = None) -> list[Leak]:
+    text = payload_text(payload)
+    restorer = restorer or Restorer(vault)
+    # blank out our own stand-ins first, so a fake that happens to equal a real value elsewhere is not a false alarm
+    blanked = blank_stand_ins(text, restorer)
     leaks = []
     seen = set()
     for span in KnownDetector(real_forms(vault)).detect(blanked):

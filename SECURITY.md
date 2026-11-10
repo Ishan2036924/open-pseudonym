@@ -15,4 +15,4 @@ You will get an answer within 3 working days. Fixes land with a vector or test t
 SDKs, and the report is credited in the changelog unless you ask otherwise.
 
 Known limits that are not vulnerabilities (they are documented): values no detector finds are not hidden;
-re-identification from context is reduced, not prevented; text inside images is out of scope for v0.1.
+re-identification from context is reduced, not prevented; text inside images is out of scope for v0.2.

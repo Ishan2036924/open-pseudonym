@@ -7,7 +7,7 @@ import { splitWs, stripWs } from "./util.ts";
 
 export const TYPES = [
   "PERSON", "ORG", "LOCATION", "ADDRESS", "EMAIL", "PHONE", "URL", "IP_ADDRESS", "DATE", "MONEY",
-  "CARD", "IBAN", "ROUTING", "BANK_ACCOUNT", "SSN", "API_KEY", "PASSWORD", "OTP", "ID",
+  "CARD", "IBAN", "ROUTING", "BANK_ACCOUNT", "SSN", "API_KEY", "PASSWORD", "OTP", "ID", "USERNAME",
 ] as const;
 
 // Values the model only ever needs to move from one place to another, never to read.
@@ -19,7 +19,7 @@ export const SECRET_TYPES: ReadonlySet<string> = new Set([
 export const DIGIT_TYPES: ReadonlySet<string> = new Set(["CARD", "PHONE", "SSN", "ROUTING", "BANK_ACCOUNT", "OTP"]);
 
 // Types where a match is case-insensitive (an email address is the same in any case).
-export const CASELESS_TYPES: ReadonlySet<string> = new Set(["EMAIL", "URL"]);
+export const CASELESS_TYPES: ReadonlySet<string> = new Set(["EMAIL", "URL", "USERNAME"]);
 
 const TYPE_NAME = /^[A-Z][A-Z0-9_]{1,31}$/;
 

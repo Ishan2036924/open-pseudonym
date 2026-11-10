@@ -27,6 +27,21 @@ export interface Pools {
   test_cards: string[];
   advertising_ssns: string[];
   public_suffixes: string[];
+  // detection word lists (tools/make_lexicon.py)
+  ambiguous_names: string[];
+  family_first: string[];
+  family_first_words: string[];
+  middle_names: string[];
+  // place -> [kind, where it is]; a Map for the same reason as name_gender
+  places: Map<string, [string, string]>;
+  ambiguous_places: string[];
+  holidays: string[];
+  birth_cues: string[];
+  profile_hosts: string[];
+  profile_path_words: string[];
+  code_mentions: string[];
+  org_names: string[];
+  us_state_codes: Map<string, string>;
 }
 
 export interface PatternSpec {
@@ -49,7 +64,12 @@ let patternsCache: PatternSpec[] | null = null;
 export function pools(): Pools {
   if (poolsCache === null) {
     const raw = readJson("pools.json");
-    poolsCache = { ...raw, name_gender: new Map(Object.entries(raw.name_gender)) };
+    poolsCache = {
+      ...raw,
+      name_gender: new Map(Object.entries(raw.name_gender)),
+      places: new Map(Object.entries(raw.places)),
+      us_state_codes: new Map(Object.entries(raw.us_state_codes)),
+    };
   }
   return poolsCache!;
 }

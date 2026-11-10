@@ -97,6 +97,35 @@ def name_ok(value: str) -> bool:
 _STOP: frozenset[str] | None = None
 
 
+def stopwords() -> frozenset[str]:
+    """The name stopwords, lower case, built once."""
+    return _stopwords()
+
+
+_AMBIGUOUS: frozenset[str] | None = None
+
+
+def ambiguous_names() -> frozenset[str]:
+    """Names that are also everyday words ("Will", "May"), lower case. A part like this is never searched for on its
+    own: "Will you join?" is not about Will."""
+    global _AMBIGUOUS
+    if _AMBIGUOUS is None:
+        _AMBIGUOUS = frozenset(w.lower() for w in pools()["ambiguous_names"])
+    return _AMBIGUOUS
+
+
+_CUE_ONLY: frozenset[str] | None = None
+
+
+def cue_only(type_: str, value: str) -> bool:
+    """A one-word name or place that is also an everyday word ("Will", "Oxford") is hidden only where a cue finds it,
+    so it is never searched for on its own afterwards, and its later plain uses are not leaks."""
+    global _CUE_ONLY
+    if _CUE_ONLY is None:
+        _CUE_ONLY = frozenset(ambiguous_names() | {w.lower() for w in pools()["ambiguous_places"]})
+    return type_ in ("PERSON", "LOCATION") and " " not in value.strip() and value.strip().lower() in _CUE_ONLY
+
+
 def _stopwords() -> frozenset[str]:
     global _STOP
     if _STOP is None:

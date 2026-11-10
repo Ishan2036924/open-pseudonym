@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, Protocol
 
 from . import checks, dates
-from ._data import patterns as shared_patterns
+from ._data import patterns as shared_patterns, pools
 from .types import check_type_name
 
 NB = "(?<![A-Za-z0-9_])"
@@ -55,7 +55,7 @@ class PatternDetector:
     def __init__(self, extra: Iterable[dict] = (), dayfirst: bool = False, default_year: Callable[[], int] | None = None):
         self.dayfirst = dayfirst
         self._default_year = default_year or (lambda: 2000)
-        self._compiled = [self._compile(p) for p in [*shared_patterns(), *extra]]
+        self._compiled = _shared_compiled() + [self._compile(p) for p in extra]
 
     @staticmethod
     def _compile(p: dict) -> _Compiled:
@@ -93,6 +93,18 @@ class PatternDetector:
                 if self._passes(c.check, value):
                     out.append(Span(start, end, c.type, value, "rules", c.priority))
         return out
+
+
+_SHARED: list[_Compiled] | None = None
+
+
+def _shared_compiled() -> list[_Compiled]:
+    """The shared patterns, compiled once per process: some are large word lists, and `re`'s own cache can drop
+    them when an app compiles many other expressions."""
+    global _SHARED
+    if _SHARED is None:
+        _SHARED = [PatternDetector._compile(p) for p in shared_patterns()]
+    return list(_SHARED)
 
 
 class KnownDetector:
@@ -182,3 +194,104 @@ def resolve(spans: Iterable[Span]) -> list[Span]:
         chosen.append(s)
         taken.append((s.start, s.end))
     return sorted(chosen, key=lambda s: s.start)
+
+
+_TOKEN = re.compile(r"[^ \t\r\n ]+")
+
+
+def resolve_people(spans: Iterable[Span]) -> list[Span]:
+    """`resolve`, with two extra rules so a person is never half hidden.
+
+    1. A name that contains a shorter name takes that name's priority. "Ms. Reyes" teaches us "Reyes"; later
+       "Dana Reyes" must be hidden whole, not as "Dana" plus a fake surname. A full name whose surname is also a
+       place ("Isla Fairbanks") beats the place.
+    2. A name that loses to another type keeps the words that type did not cover: if "Reyes, TX" wins as a place,
+       "Dana" in front of it is still a person.
+    """
+    spans = list(spans)
+    people = [s for s in spans if s.type == "PERSON"]
+    promoted = []
+    for s in spans:
+        if s.type == "PERSON":
+            inner = [t.priority for t in people
+                     if t is not s and s.start <= t.start and t.end <= s.end and t.end - t.start < s.end - s.start]
+            surname_places = [t.priority + 1 for t in spans
+                              if t.type == "LOCATION" and s.start < t.start and t.end == s.end]
+            best = max([s.priority, *inner, *surname_places])
+            if best > s.priority:
+                s = Span(s.start, s.end, s.type, s.text, s.source, best)
+        promoted.append(s)
+    chosen = resolve(promoted)
+    extra = []
+    for s in promoted:
+        if s.type != "PERSON" or s in chosen:
+            continue
+        rivals = [c for c in chosen if c.start < s.end and s.start < c.end]
+        if not rivals or any(c.type == "PERSON" for c in rivals):
+            continue
+        run: list[tuple[int, int]] = []
+        for m in _TOKEN.finditer(s.text):
+            a, b = s.start + m.start(), s.start + m.end()
+            if any(a < c.end and c.start < b for c in rivals):
+                extra.extend(_name_run(run, s))
+                run = []
+            else:
+                run.append((a, b))
+        extra.extend(_name_run(run, s))
+    return resolve(chosen + extra) if extra else chosen
+
+
+def _name_run(run: list[tuple[int, int]], whole: Span) -> list[Span]:
+    if not run:
+        return []
+    a, b = run[0][0], run[-1][1]
+    text = whole.text[a - whole.start:b - whole.start]
+    return [Span(a, b, "PERSON", text, whole.source, whole.priority)] if checks.name_ok(text) else []
+
+
+_NAME_WORD = re.compile(r"[A-ZÀ-ÖØ-ÞĀ-Ž][A-Za-zÀ-ÖØ-öø-ÿĀ-ž'-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]")
+_INITIAL = re.compile(r"[A-Z]\.")
+_BREAKS = " \t\r\n(\"'"
+
+
+def grow_names(spans: list[Span], text: str) -> list[Span]:
+    """A name the vault or the app already knows ("Reyes") may sit next to a part we have not seen: "Dana Reyes",
+    "D. Reyes", "met Zorblax Reyes". Grow such a span by one word on each side when that word reads as part of the
+    name, so the whole person is hidden. Only known values grow; the patterns already take whole names."""
+    data = pools()
+    stop = checks.stopwords()
+    given = data["name_gender"]
+    places = data["places"]
+    out = []
+    for i, s in enumerate(spans):
+        if s.type != "PERSON" or s.source != "known":
+            out.append(s)
+            continue
+        lo = out[-1].end if out else 0
+        hi = spans[i + 1].start if i + 1 < len(spans) else len(text)
+        start, end = s.start, s.end
+        if start >= 2 and text[start - 1] == " ":
+            a = start - 1
+            while a > lo and text[a - 1] not in _BREAKS:
+                a -= 1
+            word = text[a:start - 1]
+            if a >= lo and word and word.lower() not in stop and word not in places and (
+                    _INITIAL.fullmatch(word)
+                    or (_NAME_WORD.fullmatch(word) and (word.lower() in given or not _sentence_start(text, a)))):
+                start = a
+        if " " not in s.text and end + 1 < hi and text[end] == " ":
+            b = end + 1
+            while b < hi and text[b] not in _BREAKS and text[b] not in ".,;:!?)":
+                b += 1
+            word = text[end + 1:b]
+            if word and _NAME_WORD.fullmatch(word) and word.lower() not in stop and word not in places:
+                end = b
+        if (start, end) != (s.start, s.end):
+            s = Span(start, end, s.type, text[start:end], s.source, s.priority)
+        out.append(s)
+    return out
+
+
+def _sentence_start(text: str, at: int) -> bool:
+    before = text[:at].rstrip(" \t")
+    return not before or before[-1] in ".!?:\n\"(" or before.endswith("\n")

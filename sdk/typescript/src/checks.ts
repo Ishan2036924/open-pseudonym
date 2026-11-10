@@ -5,7 +5,7 @@
 
 import { pools } from "./data.ts";
 import { digitsOf } from "./types.ts";
-import { cpLength, splitWs } from "./util.ts";
+import { cpLength, splitWs, stripWs } from "./util.ts";
 
 // IBAN lengths per country (ISO 13616 registry). Unknown countries are rejected rather than guessed.
 export const IBAN_LENGTHS: ReadonlyMap<string, number> = new Map(Object.entries({
@@ -97,7 +97,31 @@ export function nameOk(value: string): boolean {
 
 let stop: Set<string> | null = null;
 
-function stopwords(): Set<string> {
+let ambiguous: Set<string> | null = null;
+
+/**
+ * Names that are also everyday words ("Will", "May"), lower case. A part like this is never searched for on its own:
+ * "Will you join?" is not about Will.
+ */
+export function ambiguousNames(): Set<string> {
+  if (ambiguous === null) ambiguous = new Set(pools().ambiguous_names.map((w) => w.toLowerCase()));
+  return ambiguous;
+}
+
+let cueOnlyWords: Set<string> | null = null;
+
+/**
+ * A one-word name or place that is also an everyday word ("Will", "Oxford") is hidden only where a cue finds it, so
+ * it is never searched for on its own afterwards, and its later plain uses are not leaks.
+ */
+export function cueOnly(type: string, value: string): boolean {
+  cueOnlyWords ??= new Set([...ambiguousNames(), ...pools().ambiguous_places.map((w) => w.toLowerCase())]);
+  const v = stripWs(value);
+  return (type === "PERSON" || type === "LOCATION") && !v.includes(" ") && cueOnlyWords.has(v.toLowerCase());
+}
+
+/** The name stopwords, lower case, built once. */
+export function stopwords(): Set<string> {
   if (stop === null) stop = new Set(pools().name_stopwords.map((w) => w.toLowerCase()));
   return stop;
 }
