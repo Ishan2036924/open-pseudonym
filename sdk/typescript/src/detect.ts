@@ -14,7 +14,7 @@
 
 import * as checks from "./checks.ts";
 import * as dates from "./dates.ts";
-import { patterns as sharedPatterns, type PatternSpec } from "./data.ts";
+import { patterns as sharedPatterns, pools, type PatternSpec } from "./data.ts";
 import { checkTypeName } from "./types.ts";
 import { cmpCodePoints, cpLength, escapeRegExp, findAll, splitWs } from "./util.ts";
 
@@ -56,10 +56,10 @@ export class PatternDetector {
   constructor(extra: Iterable<PatternSpec> = [], dayfirst = false, defaultYear?: () => number) {
     this.dayfirst = dayfirst;
     this.defaultYear = defaultYear ?? (() => 2000);
-    this.compiled = [...sharedPatterns(), ...extra].map(PatternDetector.compile);
+    this.compiled = [...sharedCompiled(), ...[...extra].map(PatternDetector.compile)];
   }
 
-  private static compile(p: PatternSpec): Compiled {
+  static compile(p: PatternSpec): Compiled {
     // "d" gives the start and end of each capture group, which is what a pattern's `group` refers to
     const flags = "gud" + ((p.flags ?? "").includes("i") ? "i" : "");
     return {
@@ -99,6 +99,14 @@ export class PatternDetector {
     }
     return out;
   }
+}
+
+let shared: Compiled[] | null = null;
+
+/** The shared patterns, compiled once per process: some are large word lists. */
+function sharedCompiled(): Compiled[] {
+  shared ??= sharedPatterns().map(PatternDetector.compile);
+  return shared;
 }
 
 /** A value to look for: (type, text, mode). */
@@ -202,4 +210,108 @@ export function resolve(spans: Iterable<Span>): Span[] {
     taken.push([s.start, s.end]);
   }
   return chosen.sort((a, b) => a.start - b.start);
+}
+
+const TOKEN = /[^ \t\r\n ]+/gu;
+
+/**
+ * `resolve`, with two extra rules so a person is never half hidden.
+ *
+ * 1. A name that contains a shorter name takes that name's priority. "Ms. Reyes" teaches us "Reyes"; later
+ *    "Dana Reyes" must be hidden whole, not as "Dana" plus a fake surname. A full name whose surname is also a
+ *    place ("Isla Fairbanks") beats the place.
+ * 2. A name that loses to another type keeps the words that type did not cover: if "Reyes, TX" wins as a place,
+ *    "Dana" in front of it is still a person.
+ */
+export function resolvePeople(input: Iterable<Span>): Span[] {
+  const spans = [...input];
+  const people = spans.filter((s) => s.type === "PERSON");
+  const promoted = spans.map((s) => {
+    if (s.type !== "PERSON") return s;
+    const inner = people
+      .filter((t) => t !== s && s.start <= t.start && t.end <= s.end && cpLength(t.text) < cpLength(s.text))
+      .map((t) => t.priority);
+    const surnamePlaces = spans
+      .filter((t) => t.type === "LOCATION" && s.start < t.start && t.end === s.end)
+      .map((t) => t.priority + 1);
+    const best = Math.max(s.priority, ...inner, ...surnamePlaces);
+    return best > s.priority ? span(s.start, s.end, s.type, s.text, s.source, best) : s;
+  });
+  const chosen = resolve(promoted);
+  const extra: Span[] = [];
+  for (const s of promoted) {
+    if (s.type !== "PERSON" || chosen.includes(s)) continue;
+    const rivals = chosen.filter((c) => c.start < s.end && s.start < c.end);
+    if (rivals.length === 0 || rivals.some((c) => c.type === "PERSON")) continue;
+    let run: [number, number][] = [];
+    for (const m of findAll(TOKEN, s.text)) {
+      const a = s.start + m.index;
+      const b = a + m[0].length;
+      if (rivals.some((c) => a < c.end && c.start < b)) {
+        extra.push(...nameRun(run, s));
+        run = [];
+      } else {
+        run.push([a, b]);
+      }
+    }
+    extra.push(...nameRun(run, s));
+  }
+  return extra.length > 0 ? resolve([...chosen, ...extra]) : chosen;
+}
+
+function nameRun(run: [number, number][], whole: Span): Span[] {
+  if (run.length === 0) return [];
+  const a = run[0][0];
+  const b = run[run.length - 1][1];
+  const text = whole.text.slice(a - whole.start, b - whole.start);
+  return checks.nameOk(text) ? [span(a, b, "PERSON", text, whole.source, whole.priority)] : [];
+}
+
+const NAME_WORD = /^[A-ZÀ-ÖØ-ÞĀ-Ž][A-Za-zÀ-ÖØ-öø-ÿĀ-ž'-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]$/u;
+const INITIAL = /^[A-Z]\.$/u;
+const BREAKS = new Set([" ", "\t", "\r", "\n", "(", "\"", "'"]);
+
+/**
+ * A name the vault or the app already knows ("Reyes") may sit next to a part we have not seen: "Dana Reyes",
+ * "D. Reyes", "met Zorblax Reyes". Grow such a span by one word on each side when that word reads as part of the
+ * name, so the whole person is hidden. Only known values grow; the patterns already take whole names.
+ */
+export function growNames(spans: Span[], text: string): Span[] {
+  const data = pools();
+  const stop = checks.stopwords();
+  const given = data.name_gender;
+  const places = data.places;
+  const out: Span[] = [];
+  spans.forEach((s, i) => {
+    if (s.type !== "PERSON" || s.source !== "known") {
+      out.push(s);
+      return;
+    }
+    const lo = out.length > 0 ? out[out.length - 1].end : 0;
+    const hi = i + 1 < spans.length ? spans[i + 1].start : text.length;
+    let start = s.start;
+    let end = s.end;
+    if (start >= 2 && text[start - 1] === " ") {
+      let a = start - 1;
+      while (a > lo && !BREAKS.has(text[a - 1])) a--;
+      const word = text.slice(a, start - 1);
+      if (a >= lo && word && !stop.has(word.toLowerCase()) && !places.has(word) &&
+        (INITIAL.test(word) || (NAME_WORD.test(word) && (given.has(word.toLowerCase()) || !sentenceStart(text, a))))) {
+        start = a;
+      }
+    }
+    if (!s.text.includes(" ") && end + 1 < hi && text[end] === " ") {
+      let b = end + 1;
+      while (b < hi && !BREAKS.has(text[b]) && !".,;:!?)".includes(text[b])) b++;
+      const word = text.slice(end + 1, b);
+      if (word && NAME_WORD.test(word) && !stop.has(word.toLowerCase()) && !places.has(word)) end = b;
+    }
+    out.push(start !== s.start || end !== s.end ? span(start, end, s.type, text.slice(start, end), s.source, s.priority) : s);
+  });
+  return out;
+}
+
+function sentenceStart(text: string, at: number): boolean {
+  const before = text.slice(0, at).replace(/[ \t]+$/u, "");
+  return before.length === 0 || ".!?:\n\"(".includes(before[before.length - 1]);
 }

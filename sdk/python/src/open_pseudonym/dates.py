@@ -110,3 +110,43 @@ def render(day: dt.date, like: ParsedDate) -> str:
         return out + (f", {day.year}" if like.has_year else "")
     out = f"{dom} {month}{like.dot}"
     return out + (f" {day.year}" if like.has_year else "")
+
+
+# Context around a date. Both lists live in data/pools.json so every SDK reads the same words.
+_HOLIDAY_RE: re.Pattern | None = None
+_BIRTH_RE: re.Pattern | None = None
+
+
+def _words_re(items: list[str]) -> re.Pattern:
+    alts = sorted({re.escape(w).replace("\\'", "'") for w in items}, key=lambda w: (-len(w), w))
+    return re.compile(r"(?<![A-Za-z])(?:" + "|".join(alts) + r")(?![A-Za-z])", re.IGNORECASE)
+
+
+def _context(text: str) -> str:
+    return text.replace("\u2019", "'")
+
+
+def near_holiday(text: str, start: int, end: int) -> bool:
+    """True when a holiday is named right next to the date ("Christmas Day, December 25"). Such a date stays as it is:
+    the holiday already names the day, and a shifted date would contradict it."""
+    global _HOLIDAY_RE
+    if _HOLIDAY_RE is None:
+        from ._data import pools
+
+        _HOLIDAY_RE = _words_re(pools()["holidays"])
+    return _HOLIDAY_RE.search(_context(text[max(0, start - 30):start] + " " + text[end:end + 20])) is not None
+
+
+def near_birth(text: str, start: int) -> bool:
+    """True when the words just before the date say it is a birth date."""
+    global _BIRTH_RE
+    if _BIRTH_RE is None:
+        from ._data import pools
+
+        _BIRTH_RE = _words_re(pools()["birth_cues"])
+    return _BIRTH_RE.search(_context(text[max(0, start - 40):start])) is not None
+
+
+def age(born: dt.date, on: dt.date) -> int:
+    """Whole years from `born` to `on`, the way people count their age."""
+    return on.year - born.year - ((on.month, on.day) < (born.month, born.day))

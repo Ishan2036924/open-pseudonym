@@ -9,16 +9,17 @@
 // `resolveArgs`. The vault stays here.
 
 import { createHmac, randomUUID } from "node:crypto";
-import { abaOk, luhnOk, ssnOk } from "./checks.ts";
-import { pools } from "./data.ts";
+import { abaOk, ambiguousNames, cueOnly, luhnOk, ssnOk, stopwords } from "./checks.ts";
 import * as dates from "./dates.ts";
-import { check as egressCheck, EgressLeak, EgressLog, knownMode, type Leak } from "./egress.ts";
+import { blankStandIns, check as egressCheck, EgressLeak, EgressLog, knownMode, type Leak } from "./egress.ts";
 import * as fakes from "./fakes.ts";
 import { Ctx, fillTemplate } from "./fakes.ts";
 import { FF1 } from "./fpe.ts";
 import * as handles from "./handles.ts";
 import { HANDLE, HandleRefused, type SinkLike, type SourceLike } from "./handles.ts";
-import { KnownDetector, PatternDetector, resolve, type Detector, type Form, type Span } from "./detect.ts";
+import {
+  growNames, KnownDetector, PatternDetector, resolve, resolvePeople, type Detector, type Form, type Span,
+} from "./detect.ts";
 import type { PatternSpec } from "./data.ts";
 import { Policy, loadProfile, type Rule } from "./policy.ts";
 import { apply, Restorer, StreamRestorer } from "./restore.ts";
@@ -220,6 +221,7 @@ export class Session {
   readonly maskedInput: boolean;
   private readonly patterns: PatternDetector;
   private knownCache: [number, KnownDetector] | null = null;
+  private knownForms: [string, KnownDetector] | null = null;
   private restorerCache: Restorer | null = null;
 
   constructor(policy: Policy | string, o: SessionOptions = {}) {
@@ -253,7 +255,8 @@ export class Session {
   private knownDetector(): KnownDetector {
     if (this.knownCache && this.knownCache[0] === this.vault.version) return this.knownCache[1];
     const forms: Form[] = [];
-    const stopWords = new Set(pools().name_stopwords.map((w) => w.toLowerCase()));
+    // parts that are also words are never searched for alone
+    const stopWords = new Set([...stopwords(), ...ambiguousNames()]);
     for (const [t, values] of Object.entries(this.known)) {
       for (const v of values) {
         forms.push([t, v, knownMode(t, v)]);
@@ -266,15 +269,22 @@ export class Session {
     for (const e of this.vault.entries) {
       if (e.type === "DATE" || e.type === "MONEY") continue; // the patterns find these again, and their stand-ins depend on the format
       for (const real of new Set(e.surfaces.values())) {
+        if (cueOnly(e.type, real)) continue;
         if (DIGIT_TYPES.has(e.type) && digitsOf(real).length >= 6) forms.push([e.type, digitsOf(real), "digits"]);
         else forms.push([e.type, real, knownMode(e.type, real)]);
       }
     }
-    const stop = new Set(pools().name_stopwords.map((w) => w.toLowerCase()));
     for (const realPart of this.vault.partsBack.values()) {
-      if ([...realPart].length >= 2 && !stop.has(realPart.toLowerCase())) forms.push(["PERSON", realPart, "case"]);
+      if ([...realPart].length >= 2 && !stopWords.has(realPart.toLowerCase())) forms.push(["PERSON", realPart, "case"]);
     }
-    const det = new KnownDetector(forms);
+    const key = JSON.stringify(forms);
+    let det: KnownDetector;
+    if (this.knownForms !== null && this.knownForms[0] === key) {
+      det = this.knownForms[1]; // the vault changed, but not in anything we search for
+    } else {
+      det = new KnownDetector(forms);
+      this.knownForms = [key, det];
+    }
     this.knownCache = [this.vault.version, det];
     return det;
   }
@@ -293,7 +303,8 @@ export class Session {
   detect(text: string): Span[] {
     const spans = [...this.patterns.detect(text), ...this.knownDetector().detect(text)];
     for (const d of this.extraDetectors) spans.push(...d.detect(text));
-    return resolve(spans).filter((s) => !this.allow.has(s.text.toLowerCase()) && !this.isOurs(s.text));
+    return growNames(resolvePeople(spans), text)
+      .filter((s) => !this.allow.has(s.text.toLowerCase()) && !this.isOurs(s.text));
   }
 
   private isOurs(text: string): boolean {
@@ -314,7 +325,7 @@ export class Session {
       // what we just learned (a name, its parts) may appear elsewhere in this same text without a cue,
       // like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
       const current = spans;
-      todo = resolve(this.knownDetector().detect(text)).filter((sp) =>
+      todo = growNames(resolve(this.knownDetector().detect(text)), text).filter((sp) =>
         !current.some((o) => sp.start < o.end && o.start < sp.end) && !this.allow.has(sp.text.toLowerCase()) &&
         !this.isOurs(sp.text));
       if (todo.length === 0) {
@@ -352,11 +363,26 @@ export class Session {
     return { text: out.join(""), replacements: reps, notes };
   }
 
+  /**
+   * True when this mention stays as written. The masking and the egress check both ask here, so a value we chose to
+   * keep is never reported as a leak.
+   */
+  private kept(span: Span, text: string): boolean {
+    const action = this.policy.ruleFor(span.type).action;
+    if (action === "keep") return true;
+    if (span.type === "DATE" && (action === "shift" || action === "fake") && dates.nearHoliday(text, span.start, span.end)) {
+      // "Christmas Day, December 25": the words already give the date away, and a shifted day would contradict them
+      return dates.parse(span.text, this.year(), this.dayfirst) !== null;
+    }
+    // a country or a state is already general
+    return span.type === "LOCATION" && action === "generalize" && fakes.coarsePlace(span.text);
+  }
+
   private standIn(span: Span, text: string, source: SourceLike | null): [string, Entry] | null {
     const rule = this.policy.ruleFor(span.type);
     let action = rule.action;
     const type = span.type;
-    if (action === "keep") return null;
+    if (this.kept(span, text)) return null;
     if (action === "refuse") throw new RefusedData(type);
     let parsed: dates.ParsedDate | null = null;
     let norm: string;
@@ -389,7 +415,7 @@ export class Session {
     } else if (a === "fake" && t === "MONEY") {
       value = this.moneyScaled(span.text);
     } else if (a === "generalize") {
-      value = this.generalize(t, span.text, parsed);
+      value = this.generalize(t, span.text, parsed, text.slice(span.end, span.end + 40));
     } else {
       value = entry.standIn;
     }
@@ -407,9 +433,20 @@ export class Session {
     if (action === "fake") {
       if (type === "MONEY") value = this.moneyScaled(real);
       else if (type === "EMAIL") value = fakes.email(ctx, real, (full) => this.personFromEmail(full, text));
-      else value = fakes.make(type, ctx, real);
+      else if (type === "ORG") {
+        const [made, core] = fakes.orgParts(ctx, real);
+        value = made;
+        meta = { core };
+      } else value = fakes.make(type, ctx, real);
     } else if (action === "shift") {
-      const shifted = parsed!.day.plusDays(this.vault.getDateOffset());
+      let offset = this.vault.getDateOffset();
+      if (parsed!.hasYear && dates.nearBirth(text, span.start)) {
+        // a birth date moves the other way if the usual shift would change the person's age today
+        const now = new Date(this.now() * 1000);
+        const today = dates.Day.of(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate())!;
+        if (dates.age(parsed!.day, today) !== dates.age(parsed!.day.plusDays(offset), today)) offset = -offset;
+      }
+      const shifted = parsed!.day.plusDays(offset);
       value = dates.render(shifted, parsed!);
       meta = { day: parsed!.day.isoformat(), shifted: shifted.isoformat() };
     } else if (action === "tag") {
@@ -420,7 +457,7 @@ export class Session {
     } else if (action === "fpe") {
       value = this.fpe(type, real);
     } else if (action === "generalize") {
-      value = this.generalize(type, real, parsed);
+      value = this.generalize(type, real, parsed, text.slice(span.end, span.end + 40));
     } else if (action === "drop") {
       value = `[${type} removed]`;
     } else if (action === "handle") {
@@ -430,12 +467,22 @@ export class Session {
       throw new Error(`unknown action ${JSON.stringify(action)}`); // policy validation keeps us out of here
     }
     const entry = this.vault.add(type, real, norm, action, value, restorable, meta);
+    if (type === "ORG" && action === "fake") {
+      const realCore = fakes.orgCore(real);
+      if (realCore !== real && fakes.orgCoreUsable(realCore)) {
+        // the bare name is known from now on, so "work at Acme" is hidden like "Acme Corp" was
+        this.vault.addSurface(entry, meta.core, realCore);
+      }
+    }
     return [value, entry];
   }
 
   /** An address like dana.reyes@ names a person; give them the same fake name everywhere. */
   private personFromEmail(fullName: string, text: string): void {
     const rule = this.policy.ruleFor("PERSON");
+    // names stay visible under this policy, so the address gets plain fake words; registering the name's parts would
+    // make the egress check treat the visible name as a leak
+    if (rule.action === "keep") return;
     const norm = normalize("PERSON", fullName);
     if (rule.action === "fake" && this.vault.find("PERSON", norm, "fake") === undefined) {
       const value = fakes.person(new Ctx(this.vault, text, rule.options), fullName);
@@ -536,7 +583,7 @@ export class Session {
     return formatMoney(cents * BigInt(this.vault.getMoneyFactor()), fmt);
   }
 
-  private generalize(type: string, real: string, parsed: dates.ParsedDate | null): string {
+  private generalize(type: string, real: string, parsed: dates.ParsedDate | null, after = ""): string {
     if (type === "DATE") {
       if (parsed === null) return "a date";
       const month = dates.MONTHS[parsed.day.month - 1];
@@ -551,6 +598,11 @@ export class Session {
         dollars = ((dollars + step / 2n) / step) * step;
       }
       return "about " + formatMoney(dollars * 100n, { ...fmt, decimals: false });
+    }
+    if (type === "LOCATION") return fakes.generalPlace(real, after);
+    if (type === "ADDRESS") {
+      const area = fakes.postcodeArea(real);
+      if (area !== null) return area;
     }
     return GENERAL[type] ?? `[${type}]`;
   }
@@ -745,10 +797,14 @@ export class Session {
    * the content fields, so a field that was never masked (a document, a metadata note) is caught too.
    */
   checkEgress(payload: Uint8Array | string): Leak[] {
-    const leaks = egressCheck(this.vault, payload, this.restorer());
+    const restorer = this.restorer();
+    const leaks = egressCheck(this.vault, payload, restorer);
     const seen = new Set(leaks.map((lk) => JSON.stringify([lk.type, lk.entryId])));
-    for (const span of this.detect(contentText(payload))) {
-      if (this.policy.ruleFor(span.type).action !== "keep" && !this.vault.isStandIn(span.text)) {
+    const text = contentText(payload);
+    // our own stand-ins are blanked first, so a slice of a fake ("Rowan Whitlock" inside "Taylor Rowan Whitlock") is
+    // not taken for a new name
+    for (const span of this.detect(blankStandIns(text, restorer))) {
+      if (!this.kept(span, text) && !this.vault.isStandIn(span.text)) {
         const key = JSON.stringify([span.type, "detected"]);
         if (!seen.has(key)) {
           seen.add(key);

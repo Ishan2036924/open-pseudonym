@@ -1,3 +1,6 @@
+import { pools } from "./data.ts";
+import { cmpCodePoints, cpLength, escapeRegExp } from "./util.ts";
+
 // Reading and writing the date formats we detect, so a shifted date comes back in the same shape.
 //
 // If the text says "Thu, March 5", the shifted version must still look like "March 12" and not "2026-03-12";
@@ -182,4 +185,38 @@ export function render(day: Day, like: ParsedDate): string {
     return `${month}${like.dot} ${dom}` + (like.hasYear ? `, ${day.year}` : "");
   }
   return `${dom} ${month}${like.dot}` + (like.hasYear ? ` ${day.year}` : "");
+}
+
+// Context around a date. Both lists live in data/pools.json so every SDK reads the same words.
+let holidayRe: RegExp | null = null;
+let birthRe: RegExp | null = null;
+
+function wordsRe(items: string[]): RegExp {
+  const alts = [...new Set(items.map(escapeRegExp))].sort((a, b) => cpLength(b) - cpLength(a) || cmpCodePoints(a, b));
+  return new RegExp("(?<![A-Za-z])(?:" + alts.join("|") + ")(?![A-Za-z])", "iu");
+}
+
+function context(text: string): string {
+  return text.replaceAll("’", "'");
+}
+
+/**
+ * True when a holiday is named right next to the date ("Christmas Day, December 25"). Such a date stays as it is:
+ * the holiday already names the day, and a shifted date would contradict it.
+ */
+export function nearHoliday(text: string, start: number, end: number): boolean {
+  holidayRe ??= wordsRe(pools().holidays);
+  return holidayRe.test(context(text.slice(Math.max(0, start - 30), start) + " " + text.slice(end, end + 20)));
+}
+
+/** True when the words just before the date say it is a birth date. */
+export function nearBirth(text: string, start: number): boolean {
+  birthRe ??= wordsRe(pools().birth_cues);
+  return birthRe.test(context(text.slice(Math.max(0, start - 40), start)));
+}
+
+/** Whole years from `born` to `on`, the way people count their age. */
+export function age(born: Day, on: Day): number {
+  const before = on.month < born.month || (on.month === born.month && on.day < born.day);
+  return on.year - born.year - (before ? 1 : 0);
 }

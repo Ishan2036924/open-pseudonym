@@ -41,17 +41,17 @@
   {
    "op": "digest",
    "profile": "strict",
-   "expect": "sha-256:Kup3k5qb2ghiy_CIv29qnu3bCHcZDFkWye3EIfRvN-Y"
+   "expect": "sha-256:rg727FeKB71xaWRmAQEoNBqEw4IJdivZD-MctOxB4Og"
   },
   {
    "op": "digest",
    "profile": "draft_reply",
-   "expect": "sha-256:3pyGzM1KRJVM1phUKj79n8eCEabjJFBVFiQs8TOba_8"
+   "expect": "sha-256:FgzgYGSHUaikxSzqt4ghBLeU7yQP_grXs4w0ZL2uKG4"
   },
   {
    "op": "digest",
    "profile": "secrets_only",
-   "expect": "sha-256:YuAjhIt4ssnsG-isnffVeo36XckdGkAZjBSKHXeOUQw"
+   "expect": "sha-256:paCJRUr2OrPuh1Rl7FNsURtm6TbLwvtxtIn5v2qheng"
   }
  ]
 }

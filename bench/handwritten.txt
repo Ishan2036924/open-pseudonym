@@ -1,8 +1,9 @@
 # Hand-written items in phrasings the generator does not use. Values are fictional. Marked [[TYPE:value]].
 # Caveat: written by the same author as the detector, after it existed. A set written by someone else is still needed.
+# 0.2 added ID labels to the three record numbers below, which 0.1 had no type for.
 hey [[PERSON:Carmen]], the wifi password is on the fridge, and my login code was [[OTP:551208]] if you need it
 ---
-Please wire it to [[IBAN:GB82 WEST 1234 5698 7654 32]] before Friday. Ref: INV-2231.
+Please wire it to [[IBAN:GB82 WEST 1234 5698 7654 32]] before Friday. Ref: [[ID:INV-2231]].
 ---
 From: [[PERSON:Jonah Weissman]] <[[EMAIL:jonah.w@postbox.net]]>
 Quick one: can you send the deck to [[PERSON:Isla Fairbanks]]? She's at [[EMAIL:isla@greybridge.co.uk]].
@@ -11,7 +12,7 @@ Reminder for [[DATE:2026-04-14]]: dentist at [[ADDRESS:48 Harbor Road]], call [[
 ---
 My SSN is [[SSN:219-09-9999]] and the routing number is [[ROUTING:021000021]], account [[BANK_ACCOUNT:12345678]].
 ---
-Order 4421-9983-1120 shipped. Tracking 1Z999AA10123456784. No action needed.
+Order [[ID:4421-9983-1120]] shipped. Tracking [[ID:1Z999AA10123456784]]. No action needed.
 ---
 thanks [[PERSON:Femi Adebayo]] for the help on [[DATE:March 3]]! lunch is on me, $[[MONEY:42.50]] was the bill
 ---

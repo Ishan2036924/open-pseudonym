@@ -11,8 +11,8 @@
 import type { KeyObject } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ambiguousNames, cueOnly, stopwords } from "./checks.ts";
 import { KnownDetector, type Form } from "./detect.ts";
-import { pools } from "./data.ts";
 import { digest } from "./jcs.ts";
 import { SignatureError, type Signer, verify } from "./jws.ts";
 import { Restorer } from "./restore.ts";
@@ -77,6 +77,7 @@ export function realForms(vault: Vault): Form[] {
   for (const e of vault.entries) {
     if (e.action === "keep") continue;
     for (const real of new Set([...e.surfaces.values(), e.real])) {
+      if (cueOnly(e.type, real)) continue;
       if (e.type === "IBAN") {
         forms.push([e.type, real, "nocase"]);
         forms.push([e.type, splitWs(real).join(""), "nocase"]);
@@ -90,22 +91,27 @@ export function realForms(vault: Vault): Form[] {
     }
   }
   // stopword parts ("May") are never masked on their own, so searching for them would only raise false alarms
-  const stop = new Set((pools().name_stopwords as string[]).map((w) => w.toLowerCase()));
+  const stop = new Set([...stopwords(), ...ambiguousNames()]);
   for (const realPart of vault.partsBack.values()) {
     if ([...realPart].length >= 3 && !stop.has(realPart.toLowerCase())) forms.push(["PERSON", realPart, "case"]);
   }
   return forms;
 }
 
+/** The text with our own stand-ins replaced by spaces (same length, so positions still line up). */
+export function blankStandIns(text: string, restorer: Restorer): string {
+  const chars = text.split("");
+  for (const m of restorer.matches(text)) {
+    for (let i = m.start; i < m.end; i++) chars[i] = " ";
+  }
+  return chars.join("");
+}
+
 export function check(vault: Vault, payload: Uint8Array | string, restorer?: Restorer | null): Leak[] {
   const text = payloadText(payload);
   const r = restorer ?? new Restorer(vault);
   // blank out our own stand-ins first, so a fake that happens to equal a real value elsewhere is not a false alarm
-  const chars = text.split("");
-  for (const m of r.matches(text)) {
-    for (let i = m.start; i < m.end; i++) chars[i] = " ";
-  }
-  const blanked = chars.join("");
+  const blanked = blankStandIns(text, r);
   const leaks: Leak[] = [];
   const seen = new Set<string>();
   for (const span of new KnownDetector(realForms(vault)).detect(blanked)) {

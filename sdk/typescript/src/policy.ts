@@ -217,6 +217,15 @@ export function loadProfile(name: string): Policy {
   return Policy.fromDict(data.profileDoc(name));
 }
 
+/**
+ * One call for the two choices: the task's profile, made stricter by the person's level when one is given.
+ * `policyFor("schedule", 3)` keeps the real dates scheduling needs, unless the level hides more.
+ */
+export function policyFor(profile: string, level?: number | null): Policy {
+  const policy = loadProfile(profile);
+  return level === undefined || level === null ? policy : policy.tighten(loadLevel(level));
+}
+
 export function profileNames(): string[] {
   return data.profileNames();
 }

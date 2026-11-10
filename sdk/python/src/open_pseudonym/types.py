@@ -10,7 +10,7 @@ import re
 
 TYPES = (
     "PERSON", "ORG", "LOCATION", "ADDRESS", "EMAIL", "PHONE", "URL", "IP_ADDRESS", "DATE", "MONEY",
-    "CARD", "IBAN", "ROUTING", "BANK_ACCOUNT", "SSN", "API_KEY", "PASSWORD", "OTP", "ID",
+    "CARD", "IBAN", "ROUTING", "BANK_ACCOUNT", "SSN", "API_KEY", "PASSWORD", "OTP", "ID", "USERNAME",
 )
 
 # Values the model only ever needs to move from one place to another, never to read.
@@ -20,7 +20,7 @@ SECRET_TYPES = frozenset({"CARD", "IBAN", "ROUTING", "BANK_ACCOUNT", "SSN", "API
 DIGIT_TYPES = frozenset({"CARD", "PHONE", "SSN", "ROUTING", "BANK_ACCOUNT", "OTP"})
 
 # Types where a match is case-insensitive (an email address is the same in any case).
-CASELESS_TYPES = frozenset({"EMAIL", "URL"})
+CASELESS_TYPES = frozenset({"EMAIL", "URL", "USERNAME"})
 
 _TYPE_NAME = re.compile(r"^[A-Z][A-Z0-9_]{1,31}$")
 

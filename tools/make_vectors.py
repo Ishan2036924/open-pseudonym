@@ -100,9 +100,10 @@ DETECT = [
     ("strict", "Your verification code is 482913. password: Tr0ub4dor&3 server 10.0.12.7",
      [["OTP", "482913"], ["PASSWORD", "Tr0ub4dor&3"], ["IP_ADDRESS", "10.0.12.7"]]),
     ("strict", "meet in New York with Priya Raman at 221 Baker Street, Apt 4 for $1,234.50",
-     [["PERSON", "Priya Raman"], ["ADDRESS", "221 Baker Street, Apt 4"], ["MONEY", "$1,234.50"]]),
+     [["LOCATION", "New York"], ["PERSON", "Priya Raman"], ["ADDRESS", "221 Baker Street, Apt 4"],
+      ["MONEY", "$1,234.50"]]),
     ("strict", "SSN 123-45-6789, routing number 021000021, tracking 123456789, see https://acme.com/a?id=7.",
-     [["SSN", "123-45-6789"], ["ROUTING", "021000021"], ["URL", "https://acme.com/a?id=7"]]),
+     [["SSN", "123-45-6789"], ["ROUTING", "021000021"], ["ID", "123456789"], ["URL", "https://acme.com/a?id=7"]]),
     ("strict", "signed with Northwind Traders Inc. on 2026-02-30 and 12 Mar 2026",
      [["ORG", "Northwind Traders Inc."], ["DATE", "12 Mar 2026"]]),
     ("strict", 'hey Carmen, my login code was 551208. Thanks Femi Adebayo for the help!',
@@ -111,6 +112,27 @@ DETECT = [
      [["PERSON", "Ana Whitfield"], ["PERSON", "Dev Malhotra"]]),
     ("strict", "Please pay Bilal Okonkwo back. Invoice to Grace Lindholm, 48 Harbor Road.",
      [["PERSON", "Bilal Okonkwo"], ["PERSON", "Grace Lindholm"], ["ADDRESS", "48 Harbor Road"]]),
+    # 0.2: names without a cue, from the given-name list, in several orders and alphabets
+    ("strict", "I met Priya yesterday; Sam Patel and Wei Zhang joined. Daniel J. Smith signed.",
+     [["PERSON", "Priya"], ["PERSON", "Sam Patel"], ["PERSON", "Wei Zhang"], ["PERSON", "Daniel J. Smith"]]),
+    ("strict", "Notes from Nguyễn Văn An and Zhang Wei: Will you join? May 5 works.",
+     [["PERSON", "Nguyễn Văn An"], ["PERSON", "Zhang Wei"], ["DATE", "May 5"]]),
+    ("strict", "Ms. Reyes called. Dana Reyes wants a refund.", [["PERSON", "Reyes"], ["PERSON", "Dana Reyes"]]),
+    ("strict", "Morgan Stanley hired Morgan Lee at Bank of America.",
+     [["ORG", "Morgan Stanley"], ["PERSON", "Morgan Lee"], ["ORG", "Bank of America"]]),
+    # 0.2: records, places, postcodes, handles
+    ("strict", "Patient MRN 448812 was seen at St. Mary's Hospital in Boise, Idaho; order #A12345 for CUST-00921 "
+               "(ISO-8601, CVE-2024-12345).",
+     [["ID", "448812"], ["ORG", "St. Mary's Hospital"], ["LOCATION", "Boise"], ["LOCATION", "Idaho"],
+      ["ID", "A12345"], ["ID", "CUST-00921"]]),
+    ("strict", "She lives in Austin, works with Austin Lee, and moved to Smalltown, MT 59801.",
+     [["LOCATION", "Austin"], ["PERSON", "Austin Lee"], ["LOCATION", "Smalltown, MT"], ["ADDRESS", "59801"]]),
+    ("strict", "Offices in London NW1 6XE and Ottawa K1A 0B1.",
+     [["LOCATION", "London"], ["ADDRESS", "NW1 6XE"], ["LOCATION", "Ottawa"], ["ADDRESS", "K1A 0B1"]]),
+    ("strict", "Ping @dana_r or <@U12345>; the decorator @property stays. Email dana@acme.com.",
+     [["USERNAME", "@dana_r"], ["USERNAME", "@U12345"], ["EMAIL", "dana@acme.com"]]),
+    ("strict", "Hola María, see https://linkedin.com/in/dana-reyes today.",
+     [["PERSON", "María"], ["URL", "https://linkedin.com/in/dana-reyes"]]),
 ]
 
 
@@ -254,6 +276,32 @@ def scenario_vectors():
         ]},
     ], known={"PERSON": ["Iris"]})
 
+    scenario("names are hidden whole", "strict", [
+        {"op": "mask", "text": "Ms. Reyes called. Dana Reyes wants a refund; D. Reyes signed. Met Zorblax Reyes too."},
+        {"op": "restore", "text": "__MASKED__", "reveal": True},
+        {"op": "egress", "payload": "__MASKED__"},
+        {"op": "egress", "payload": "__MASKED__ Dana"},
+    ])
+    scenario("the contacts level keeps names visible", "contacts", [
+        {"op": "mask", "text": "email dana.reyes@acme.com and tell Dana hi"},
+        {"op": "egress", "payload": "__MASKED__"},
+    ])
+    scenario("dates keep holidays and ages", "strict", [
+        {"op": "mask", "text": "On Christmas Day, December 25, 2026, we close. I was born March 3, 1990, so I am 36. "
+                               "We meet on March 12, 2026 and again on November 30, 2026."},
+        {"op": "restore", "text": "__MASKED__", "reveal": True},
+    ])
+    scenario("places, postcodes, handles, records and companies", "strict", [
+        {"op": "mask", "text": "I live at 221B Baker Street, London NW1 6XE and work at Acme Corp in Seattle; Acme "
+                               "pays well. Profile: https://linkedin.com/in/dana-reyes or @dana_r. Order #A12345, "
+                               "CUST-00921, in Boise, Idaho."},
+        {"op": "restore", "text": "__MASKED__", "reveal": True},
+        {"op": "egress", "payload": "__MASKED__"},
+    ])
+    scenario("summaries describe places coarsely", "summarize", [
+        {"op": "mask", "text": "She moved from Boise, Idaho to Kenya; ZIP 02115. Later: Smalltown, MT and London NW1 6XE."},
+    ])
+
     # replace the __MASKED__ placeholder with the previous mask output, then record again so expectations match
     for sc in scenarios:
         last = None
@@ -278,6 +326,20 @@ def scenario_vectors():
     assert [st["expect"] for st in eg[1:]] == [["CARD"], ["CARD"], [], ["PERSON"]]
     strict = scenarios[2]["steps"]
     assert strict[1]["expect"] == strict[0]["text"]
+    by = {sc["name"]: sc["steps"] for sc in scenarios}
+    whole = by["names are hidden whole"]
+    assert "Dana" not in whole[0]["expect"]["text"] and "Zorblax" not in whole[0]["expect"]["text"]
+    assert whole[1]["expect"] == whole[0]["text"] and whole[2]["expect"] == [] and "PERSON" in whole[3]["expect"]
+    assert by["the contacts level keeps names visible"][1]["expect"] == []
+    days = by["dates keep holidays and ages"]
+    assert "Christmas Day, December 25, 2026" in days[0]["expect"]["text"] and "March 12, 2026" not in days[0]["expect"]["text"]
+    assert days[1]["expect"] == days[0]["text"]
+    place = by["places, postcodes, handles, records and companies"]
+    for real in ["Baker", "NW1 6XE", "Acme", "Seattle", "dana-reyes", "@dana_r", "A12345", "CUST-00921", "Boise"]:
+        assert real not in place[0]["expect"]["text"], real
+    assert "ZZ99 " in place[0]["expect"]["text"] and place[1]["expect"] == place[0]["text"] and place[2]["expect"] == []
+    summary = by["summaries describe places coarsely"][0]["expect"]["text"]
+    assert "from a city, Idaho to Kenya" in summary and "021xx" in summary and "a town in Montana" in summary, summary
     write("scenarios", {"description": "Masking scenarios with fixed seeds and clocks (spec 6-10). Each step's "
                                        "expect is what a conforming SDK must produce, byte for byte.",
                         "scenarios": scenarios})

@@ -123,9 +123,9 @@ class Vault:
 
     def get_date_offset(self) -> int:
         if self.date_offset is None:
-            weeks = self.drbg.below("date.offset", 52) - 26  # -26 .. 25
+            weeks = self.drbg.below("date.offset", 16) - 8  # -8 .. 7
             if weeks >= 0:
-                weeks += 1  # never zero: -26..-1 and 1..26, so the season mostly stays
+                weeks += 1  # never zero: -8..-1 and 1..8 weeks, so the season stays
             self.date_offset = 7 * weeks  # whole weeks keep the weekday
             self.version += 1
         return self.date_offset

@@ -1,6 +1,7 @@
-# Open Pseudonym v0.1
+# Open Pseudonym v0.2
 
-Status: draft, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"`.
+Status: draft 0.2, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"` (unchanged: policies,
+vault files and receipts written under 0.1 still read the same).
 
 Open Pseudonym is a way to keep personal data away from an AI model while the model still does the task well. Before
 text reaches the model, personal values are replaced with stand-ins chosen for the task at hand. When the model
@@ -49,7 +50,7 @@ The app, not the model, supplies policies, sources and sinks. Nothing the model 
 |---|---|---|
 | `PERSON` | Dana Reyes | whitespace-collapsed, lower case |
 | `ORG` | Acme Corp | same |
-| `LOCATION` | Lisbon | same |
+| `LOCATION` | Lisbon; Boise, Idaho; Smalltown, MT | same |
 | `ADDRESS` | 221 Baker Street, Apt 4 | same |
 | `EMAIL` | dana@example.org | lower case |
 | `PHONE` | (617) 555-0142 | digits only |
@@ -65,7 +66,8 @@ The app, not the model, supplies policies, sources and sinks. Nothing the model 
 | `API_KEY` | keys, tokens, private keys | as written |
 | `PASSWORD` | the value after "password:" | as written |
 | `OTP` | one-time codes | digits only |
-| `ID` | app-defined identifiers | as written |
+| `ID` | order #A12345, MRN 448812, CUST-00921 | as written |
+| `USERNAME` | @dana_r | lower case |
 
 Apps may add types. A type name matches `^[A-Z][A-Z0-9_]{1,31}$`. Unknown types follow the policy's default rule.
 
@@ -89,6 +91,12 @@ right. The value is capture group `group`. If the pattern names a `check`, the v
 - `date`: parses as a real calendar day (section 7.3).
 - `name`: every space-separated token is at least two characters and not in `name_stopwords` (case-insensitive).
 
+Some patterns are built by `tools/make_patterns.py` from word lists in `data/pools.json`: given names (`name_gender`
+without `ambiguous_names`, such as "Will" or "May", which still need a cue), family names written first
+(`family_first`, `family_first_words`, `middle_names`), places (`places`; those in `ambiguous_places`, such as
+"Austin", count only after a place cue like "in" or "moved to"), organisations named after people (`org_names`) and
+words such as Hospital or Bank. The lists are data, so every implementation reads the same ones.
+
 **4.2 Known values.** Every real value held by the vault is matched again in new text, so a value that was hidden once
 stays hidden even without the cue that found it. Apps may also pass lists (their contacts, their own company). Matching
 modes: emails and URLs in any case; names, organisations, places and addresses of two or more words in any case
@@ -97,20 +105,35 @@ word iris); digit types with six or more digits by the same digits with up to tw
 each pair, optionally starting with `(` or `+`; shorter digit values (a 4-digit code) exactly as written. For a
 person the app lists with two or more words, each word is also a known value, so "Dana called" is caught once the
 app says Dana Reyes is a contact. Name parts (each token of a faked person,
-except stopwords and one-letter tokens) are known values of type `PERSON`. Dates and amounts are not matched this way;
+except stopwords, `ambiguous_names` and one-letter tokens) are known values of type `PERSON`. A one-word `PERSON` or
+`LOCATION` value that is in `ambiguous_names` or `ambiguous_places` ("Will", "Oxford") is never a known value: it is
+hidden only where a cue finds it, and its plain uses elsewhere ("Will you join?") are neither masked nor leaks. Dates and amounts are not matched this way;
 the patterns find them. Known values have priority 100.
 
 **4.3 Other detectors.** Any detector that returns spans (an ML model, a domain rule set) may be added. Its spans carry
 their own priority; the reference adapters use 30.
 
-**4.4 Merging.** Sort all spans by priority (high first), then length (long first), then start (early first), then
-type name. Walk the list and keep a span unless it overlaps one already kept. Then:
+**4.4 Merging.** Before sorting, a `PERSON` span takes the highest priority of any shorter `PERSON` span inside it,
+and of any `LOCATION` span that starts after it and ends where it ends plus one ("Isla Fairbanks" beats the city).
+Sort all spans by priority (high first), then length (long first), then start (early first), then type name. Walk
+the list and keep a span unless it overlaps one already kept. A `PERSON` span that lost to a span of another type
+keeps each run of whole words the winner did not cover, if the run passes the `name` check; merge once more with
+those runs added. Then known `PERSON` spans grow (4.5). Then:
 
 - drop spans whose text equals (case-insensitive) a value on the session's allow list or the policy's `allow` list;
 - only if the app declares that its input may already contain stand-ins (`masked_input`), drop spans whose text
   equals (case-insensitive) a stand-in this vault issued, which makes masking idempotent. By default input is
   treated as real: a real name that happens to equal an earlier fake is masked like any other value (otherwise it
   would reach the model as is, and restore would turn it into the wrong person).
+
+**4.5 Growing known names.** A known `PERSON` value ("Reyes") may sit next to a part not seen yet ("Dana Reyes",
+"D. Reyes"). On the left, when exactly one space comes before the span, take the word before it (back to a space,
+tab, line break, `(`, `"` or `'`, never into the previous kept span). It joins the name if it is not a stopword and
+not a key of `places`, and it is either an initial (`[A-Z].`) or a capitalised word of two or more letters that is a
+given name in `name_gender` or does not start a sentence (the text before it, without trailing spaces and tabs, is
+empty or ends in `. ! ? : " (` or a line break). On the right, a one-word span takes the next word when exactly one
+space separates them and that word (up to a break or one of `. , ; : ! ? )`, never into the next kept span) is a
+capitalised word of two or more letters, not a stopword and not a key of `places`.
 
 ## 5. Policies
 
@@ -173,7 +196,11 @@ For one input text:
 1. Detect and merge spans (section 4).
 2. Work out stand-ins in this order: all `PERSON` spans by start position, then every other span by start position.
    People go first so that an email address like `dana.reyes@...` can reuse the fake name chosen for "Dana Reyes".
-3. For each span: look up the rule for its type. `keep` leaves it. `refuse` stops with an error naming the type.
+3. For each span: look up the rule for its type. The span is **kept** (left as written) when the rule is `keep`;
+   when it is a date that parses, under `shift` or `fake`, and one of `holidays` is named in the 30 characters before
+   it or the 20 after it (the holiday already gives the day away); or when it is a place under `generalize` whose
+   kind in `places` is country, state, region or place (already general). `refuse` stops with an error naming the
+   type.
    Otherwise compute the comparison key (section 3; dates use the ISO day) and look for an existing vault entry with
    the same type, key and action.
    - **Existing entry**: if this exact text was seen before, use the stand-in it got. Otherwise make the stand-in in
@@ -232,16 +259,32 @@ and keep every other character; otherwise return the digits alone.
 
 Pools are in `data/pools.json`.
 
-- **PERSON.** Split on spaces. For each token, if its lower case is already a known name part, reuse that part's fake.
+- **PERSON.** Split on spaces. A token in the particle list (`de del della da das dos du di van von der den ter ten
+  bin ibn al el la le zu`) stays as written. For each other token, if its lower case is already a known name part,
+  reuse that part's fake. An initial (`[A-Z].`) not yet known becomes `chars("initial", A-Z, 1) + "."`.
   Otherwise it is a first name if (one token and its first hyphen-piece is in `name_gender`) or (several tokens and it
   is not the last), else a last name. First names: gender `g` = `name_gender[first piece]` or `n`; with
   `keep_gender: false`, `g = any`; pick from `first_names[g]` (for `any`, the f, m and n lists concatenated) with label
   `first.<g>`. Last names: pick from `last_names` with label `last`. Record the part pair. Copy capitalisation: an
   all-capitals token of two or more letters gives an all-capitals fake, an all-lower token a lower-case fake.
-- **ORG.** Pick from `orgs` (label `org`). If the real value ends in a legal suffix (`Inc LLC Ltd Corp Corporation
-  GmbH PLC LLP Co`, optional dot), append the same suffix.
-- **LOCATION.** Pick from `cities` (label `city`).
-- **ADDRESS.** Parse `number[letter] name suffix[.]rest`. Number: same digit count, from `below("addr.num", ...)`;
+- **ORG.** The core is the value without its legal suffix (`Inc LLC Ltd Corp Corporation GmbH PLC LLP Co`,
+  optional dot). If an earlier `fake` ORG entry has the same core (case-insensitive) and a `core` in its metadata,
+  reuse that core. Otherwise pick from `orgs` (label `org`); when the real value has a suffix, drop trailing
+  describing words (`Labs Systems Works Partners Health Analytics Logistics Media Robotics Foods Legal Learning
+  Capital Design Co Energy Retail Insurance Biotech Builders Travel Bank Studio Software Freight Clinic Advisors
+  Furniture Games`) while more than one word is left. The stand-in is the core, plus the real suffix if there is one;
+  the entry keeps the core as `meta.core`. When the real value had a suffix and its bare core is at least three
+  characters and not a stopword, the pair (fake core, real core) is added as a surface of the entry, so "Acme" alone
+  is a known value from then on and gets the same fake name.
+- **LOCATION.** For `<town>, <state>` (a code in `us_state_codes`, or a state in `places`): pick from `cities` (label
+  `city`) and keep `, <state>` as written. For a country, state or region in `places`: pick from the other places of
+  the same kind and the same region, sorted by code point (label `place.<kind>`). Otherwise pick from `cities`
+  (label `city`).
+- **ADDRESS.** Postcodes first, from ranges no address uses, all with label `postcode`, up to 200 tries for a free
+  value: a UK postcode becomes `ZZ99 ` plus one digit and two letters from `ABDEFGHJLNPQRSTUWXYZ`; a US ZIP becomes
+  `000` plus two digits (and `-` plus four digits if it had them); a Canadian code becomes `Z`, a digit, a letter, a
+  space if the real one had it, a digit, a letter and a digit, letters from `ABCEGHJKLMNPRSTVWXYZ`. Street addresses:
+  parse `number[letter] name suffix[.]rest`. Number: same digit count, from `below("addr.num", ...)`;
   letter from `chars("addr.num", A-Z, 1)` if present; name: pick from `streets` (label `street`); suffix kept as
   written; rest (unit) through `shape(rest, "addr.unit")`. If the address does not parse: `<1 + below("addr.num", 999)>
   <street> St`.
@@ -253,7 +296,7 @@ Pools are in `data/pools.json`.
 - **EMAIL.** Split the local part into runs of letters, runs of digits and single other characters. If there are at
   least two letter runs, all of at least two letters, and the first is in `name_gender`, the local part names a
   person: title-case the letter runs, join them with spaces, and register that person (a PERSON entry if the PERSON
-  rule is `fake`, otherwise just the name parts). Then each letter run becomes its part fake if known, stays if it is a
+  rule is `fake`, nothing if it is `keep`, otherwise just the name parts). Then each letter run becomes its part fake if known, stays if it is a
   generic mailbox word, becomes `chars("letter", a-z, 1)` if it is one letter, else a pick from `last_names` (label
   `mailbox`) in lower case; capitalisation copied. Digit runs become `chars("digits", 0-9, len)`. The domain is
   faked as above. While the result is not free, try again with one digit from `chars("digits", 0-9, 1)` appended to
@@ -264,9 +307,13 @@ the local part (a fresh digit each try).
   digits) use Ofcom's drama ranges: mobile `7700900` and London `2079460`, plus `chars("phone.line", 0-9, 3)`.
   Anything else: keep the first two digits if the number starts with `+`, the rest from `chars("phone.line", ...)`.
   The result is laid out with `fill` over the original.
+- **USERNAME.** Drop the `@`, split the rest like an email local part and fake each run the same way; up to 100
+  tries for a free `@` value that differs from the real one in lower case.
 - **URL.** Scheme and port stay; the host is faked as a domain; in the rest, every alphanumeric run that follows `=`,
   is 12 or more characters long, contains a digit, or contains a known real name part of three or more letters
-  (so `/in/danareyes` is caught) goes through `shape(run, "url")`.
+  (so `/in/danareyes` is caught) goes through `shape(run, "url")`. So does every path run (before `?` or `#`) on a
+  host whose registrable domain is in `profile_hosts`, unless it is in `profile_path_words`, and every run in a path
+  segment that holds a word of three or more letters found in `name_gender`.
 - **IP_ADDRESS.** `i = below("ip", 762)` until free; `TEST_NETS[i // 254] + (i % 254 + 1)` with the RFC 5737 blocks
   `192.0.2.`, `198.51.100.`, `203.0.113.`.
 - **CARD.** From `test_cards` with the same length and not yet used, pick `below("card", count)`. If none is left:
@@ -287,8 +334,10 @@ Formats read and written: `YYYY-MM-DD`; `M/D/YYYY` (or `D/M/YYYY` when the sessi
 kept per part; `Month D[st|nd|rd|th][, YYYY]`; `D[st|nd|rd|th] Month[ YYYY]`. Month names may be full, three letters
 (optionally with a dot), or `Sept`. Without a year, the year is the current year of the session clock (UTC).
 
-The vault's date offset is drawn once: `w = below("date.offset", 52) - 26; if w >= 0 then w += 1; offset = 7 * w`
-days. Whole weeks keep the weekday ("Thursday" in the text stays true). `shift` renders `day + offset` in the
+The vault's date offset is drawn once: `w = below("date.offset", 16) - 8; if w >= 0 then w += 1; offset = 7 * w`
+days, so one to eight weeks either way. Whole weeks keep the weekday ("Thursday" in the text stays true) and the
+season stays. A birth date (one of `birth_cues` in the 40 characters before it, and a year given) moves by `-offset`
+instead when `day + offset` would give a different age than `day` on the session's current UTC day. `shift` renders `day + offset` in the
 original format: a full month name stays full, a three-letter one stays three letters (`Sept` stays `Sept` only for
 September), `May` counts as full, an ordinal suffix is recomputed, a missing year stays missing.
 
@@ -310,9 +359,13 @@ decimals), or digits then `USD EUR GBP dollars euros`. Commas and decimals are k
   CARD keeps the first and last four digits and cycle-walks the middle until the Luhn check passes. ROUTING and SSN
   cycle-walk the whole number until their checks pass. PHONE with 10 or 11 digits keeps all but the last seven.
   Others encrypt all digits. The layout is kept with `fill`. With the key alone, anyone can reverse it.
-- `generalize`: PERSON "someone", ORG "an organization", LOCATION "a place", ADDRESS "a street address", EMAIL "an
-  email address", PHONE "a phone number", URL "a web link", IP_ADDRESS "an IP address", DATE and MONEY as above,
-  anything else `[TYPE]`.
+- `generalize`: PERSON "someone", ORG "an organization", ADDRESS "a street address", EMAIL "an email address",
+  PHONE "a phone number", URL "a web link", IP_ADDRESS "an IP address", DATE and MONEY as above, anything else
+  `[TYPE]`. LOCATION: `<town>, <state>` gives `a city in <state name>` when the town is in `places`, else
+  `a town in <state name>`; a place in `places` gives `a <kind> in <where>`, or `a <kind>` when `where` is empty or
+  the 40 characters after the value start with `, ` and `where` without a leading `the `; anything else `a place`.
+  Postcodes give their area: the UK outward code, the first three ZIP digits plus `xx`, the first three characters
+  of a Canadian code.
 - `drop`: `[TYPE removed]`.
 
 ## 8. The vault
@@ -417,8 +470,10 @@ value.
    spaces), plus every real name part of three or more letters that is not in `name_stopwords`.
 3. Then run detection (section 4) again over everything a person could have written: for JSON, every key and every
    string except the top-level `model`, signed reasoning and real binary base64; text sent as base64 is decoded and
-   read. A proxy also checks the query string. Any span
-   whose rule is not `keep` and that is not a stand-in is also a leak. This catches fields masking left alone.
+   read. A proxy also checks the query string. Detection runs on this text with every restore match blanked out (so
+   a slice of a long fake is not taken for a new name), and reads the context of each span from the text before
+   blanking. Any span that masking would not keep (section 6, step 3) and that is not a stand-in is also a leak.
+   This catches fields masking left alone.
 4. Any hit is a leak. A conforming sender does not send a request with a leak; it reports the types, never the values.
 
 This proves that no value **the vault knows**, and no value the detectors find in the outgoing bytes, left. It cannot
@@ -514,7 +569,7 @@ needs public commitments and contracts, so the output is "pseudonymized" in CCPA
 - **Logs.** Never log real values. Receipts and stored payloads hold stand-ins only.
 - **Caching.** Stand-ins are deterministic within a session, so repeated prefixes stay byte-identical and provider
   prompt caches keep working. System prompts without personal data can be left unmasked to keep cache hits.
-- **Images and audio** are out of scope for v0.1. Text inside images reaches the model as is.
+- **Images and audio** are out of scope for v0.2. Text inside images reaches the model as is.
 
 ## 15. Conformance
 

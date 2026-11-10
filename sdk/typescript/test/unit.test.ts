@@ -538,3 +538,73 @@ test("checkEgress reads a base64 text data: URL, and skips only the top-level mo
   assert.deepEqual(s.checkEgress(JSON.stringify({ input: "data:image/png;base64,iVBORw0KGgo=" })), []);
   assert.ok(s.checkEgress(JSON.stringify({ model: "x", items: [{ model: "dana@acme.com" }] })).some((l) => l.type === "EMAIL"));
 });
+
+// 0.2 context fixes: each test is a case that went wrong in 0.1.1
+
+test("names without a cue are found, in several cultures", () => {
+  const masked = session("strict").mask("I met Priya; Sam Patel, Wei Zhang and José García joined. Hola María.").text;
+  for (const real of ["Priya", "Sam", "Patel", "Wei", "Zhang", "José", "García", "María"]) {
+    assert.ok(!masked.includes(real), `${real} in ${masked}`);
+  }
+});
+
+test("a name is never half hidden", () => {
+  const s = session("strict");
+  const text = "Ms. Reyes called. Dana Reyes wants a refund. Met Zorblax Reyes too.";
+  const masked = s.mask(text).text;
+  for (const real of ["Dana", "Zorblax", "Reyes"]) assert.ok(!masked.includes(real), masked);
+  assert.equal(s.restore(masked), text);
+});
+
+test("records, places, postcodes and handles are hidden; standards and code annotations are not", () => {
+  const s = session("strict");
+  const text = "MRN 448812 in Boise, Idaho, London NW1 6XE, https://linkedin.com/in/dana-reyes, @dana_r, CUST-00921.";
+  const masked = s.mask(text).text;
+  for (const real of ["448812", "Boise", "NW1 6XE", "dana-reyes", "@dana_r", "CUST-00921"]) {
+    assert.ok(!masked.includes(real), `${real} in ${masked}`);
+  }
+  assert.equal(s.restore(masked), text);
+  const plain = "See ISO-8601, CVE-2024-12345 and the @property decorator.";
+  assert.equal(session("strict").mask(plain).text, plain);
+});
+
+test("holidays keep their date, and a kept date is not reported as a leak", () => {
+  const s = session("strict");
+  const masked = s.mask("On Christmas Day, December 25, 2026, we close. We meet March 12, 2026.").text;
+  assert.ok(masked.includes("Christmas Day, December 25, 2026") && !masked.includes("March 12, 2026"), masked);
+  assert.deepEqual(s.checkEgress(masked), []);
+});
+
+test("the contacts level keeps a name and does not report it as a leak", () => {
+  const s = new Session(loadLevel(2), { vault: new Vault(Buffer.alloc(32, 122), NOW), clock });
+  const masked = s.mask("email dana.reyes@acme.com and tell Dana hi").text;
+  assert.ok(!masked.includes("dana.reyes") && masked.includes("Dana"), masked);
+  assert.deepEqual(s.checkEgress(masked), []);
+});
+
+test("summaries keep coarse places and blur precise ones", () => {
+  const s = session("summarize");
+  const masked = s.mask("She moved from Boise, Idaho to Kenya; ZIP 02115. Later: Smalltown, MT.").text;
+  assert.equal(masked, "She moved from a city, Idaho to Kenya; ZIP 021xx. Later: a town in Montana.");
+  assert.deepEqual(s.checkEgress(masked), []);
+});
+
+test("policyFor combines the task and the level, and the level only adds hiding", async () => {
+  const { policyFor } = await import("../src/index.ts");
+  assert.equal(policyFor("schedule").ruleFor("DATE").action, "keep");
+  assert.equal(policyFor("schedule", 2).ruleFor("DATE").action, "keep");
+  assert.equal(policyFor("schedule", 3).ruleFor("DATE").action, "shift");
+});
+
+test("everyday text is left alone, and a word-like name is hidden only where a cue finds it", () => {
+  for (const text of ["Please order 10000 units by Friday.", "Let's meet @3pm.", "The Data Center moved.",
+    "Use the Oxford comma and wear Wellington boots."]) {
+    assert.equal(session("strict").mask(text).text, text);
+  }
+  const s = session("strict");
+  const text = "Hi Will,\nWill you join? Thanks, Will";
+  const masked = s.mask(text).text;
+  assert.ok(masked.includes("Will you join?") && masked.split("Will").length === 2, masked);
+  assert.deepEqual(s.checkEgress(masked), []);
+  assert.equal(s.restore(masked), text);
+});

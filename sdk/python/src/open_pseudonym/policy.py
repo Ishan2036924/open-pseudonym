@@ -211,6 +211,13 @@ def load_profile(name: str) -> Policy:
     return Policy.from_dict(copy.deepcopy(_data.profile_doc(name)))
 
 
+def policy_for(profile: str, level: int | None = None) -> Policy:
+    """One call for the two choices: the task's profile, made stricter by the person's level when one is given.
+    `policy_for("schedule", 3)` keeps the real dates scheduling needs, unless the level hides more."""
+    policy = load_profile(profile)
+    return policy if level is None else policy.tighten(load_level(level))
+
+
 def profile_names() -> list[str]:
     return _data.profile_names()
 

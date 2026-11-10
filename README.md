@@ -27,8 +27,9 @@ Three things make it different from a plain redaction tool:
   (`.example` domains, 555-01xx and UK drama phone numbers, documentation IP blocks, published test cards), so those
   fakes cannot reach a real person. Phone numbers in other countries have no such range and get random digits.
 - **It proves what left.** Before a request is sent, its exact bytes are checked for every real value the vault
-  knows and scanned again by the detectors. If anything personal is still there, the request does not go. With the
-  proxy's `--log-dir` (or `record_egress` in your code), every request that goes gets an Ed25519-signed,
+  knows and scanned again by the detectors. If a value it knows or recognises is still there, the request does not
+  go. (Something no detector recognises can still get through; see [How well it works](#how-well-it-works).) With
+  the proxy's `--log-dir` (or `record_egress` in your code), every request that goes gets an Ed25519-signed,
   hash-chained receipt you can check later with `opn verify`.
 
 And one feature for agents: **secret handles**. A one-time code, password or card number the model only needs to
@@ -123,12 +124,16 @@ Not everyone wants the same thing hidden, and that is fine. Products can offer o
 | Level | Label | Hidden from the model |
 |---|---|---|
 | 1 | Secrets | One-time codes, passwords, cards, bank numbers, SSNs, keys |
-| 2 | Contacts | Level 1, plus emails, phone numbers, street addresses, IPs |
-| 3 | Everything | Level 2, plus names, companies and places; dates shift together |
+| 2 | Contacts | Level 1, plus emails, phone numbers, street addresses, postcodes, usernames, IPs |
+| 3 | Everything | Level 2, plus names, companies, places and record numbers; dates shift together |
 
 Secrets are hidden at every level, as handles the model can still use (it knows "a 6-digit code from acme.com"),
 so the task still works. `load_level(2)` gives the policy; `LEVELS` holds the labels and one-line explanations to
-show people.
+show people. To combine a task with a person's choice, `policy_for("schedule", 2)` takes the task's profile and
+lets the level add hiding, never remove it.
+
+Level 3 hides what the rules can recognise. It does not hide health details, job titles or other rare facts that can
+point to a person when put together; see [Known limits](#known-limits-alpha-02).
 
 ## Profiles
 
@@ -136,7 +141,7 @@ show people.
 |---|---|
 | `draft_reply` | Replying to messages: people and contact details faked, dates shifted, secrets as handles |
 | `schedule` | Calendars: dates and times stay real, people faked |
-| `summarize` | Documents: contact details removed, people faked, places blurred |
+| `summarize` | Documents: contact details removed, people faked, cities described ("a city in Idaho") |
 | `web_research` | Lookups: companies, places and links stay, people faked |
 | `money_math` | Budgets and invoices: amounts exact, who and where faked |
 | `browse_and_fill` | Agents that log in and fill forms: secrets as bound handles |
@@ -168,26 +173,38 @@ Offline benchmark (`python bench/run.py offline`, no model, costs nothing), 120 
 | | Result |
 |---|---|
 | Cards, IBANs, SSNs, emails, phones, dates, amounts, addresses, codes | 100% found on the generated set |
-| Names, rules only | 100% on the generated set, 86% on the hand-written set |
+| Names, rules only | 100% on the generated set, 100% on the hand-written set (86% in 0.1) |
+| Record numbers (orders, invoices, tracking) | 3 of 3 on the hand-written set |
 | Names the app already knows, in any case | caught again everywhere, including "dana reyes" |
-| Planted values that reached the model (strict profile) | 0 of 570 generated, 1 of 25 hand-written |
-| Same, with the app's contact list | 0 of 570 and 0 of 25 |
+| Planted values that reached the model (strict profile) | 0 of 570 generated, 0 of 28 hand-written (1 of 25 in 0.1) |
+| Same, with the app's contact list | 0 of 570 and 0 of 28 |
 | Restore gives back exactly the original | 134 of 134 |
 | Streaming restore equals whole restore | 134 of 134 |
-| Speed | about 1 ms to mask and 0.2 ms to restore an item |
+| Speed | about 0.5 ms to mask and 0.1 ms to restore an item |
+
+And on 400 random documents built from names, places, records, handles, holidays and secrets, across nine profiles:
+Python and TypeScript gave the same output in all 2,000 comparisons, the egress check raised 0 false alarms on our
+own output, and it caught 340 of 340 real values planted back into it.
 
 A fair warning about these numbers: the generated set uses templates the name rules were tuned on, so its 100% is
 optimistic; the hand-written set is the honest one, and it is small and written by the same author. A set written by
 someone else is the most useful contribution anyone could make right now.
 
-Rules are still the weak spot for names in free text. Pass the names your app already knows (`known={"PERSON": contacts}`) or add an ML
-detector (`open_pseudonym.ml`: GLiNER, spaCy or Presidio). The model run (task accuracy on clear text, tags,
+Rules are still the weak spot for names in free text: they know about 1,150 given names, not every name. Pass the
+names your app already knows (`known={"PERSON": contacts}`) or add an ML detector (`open_pseudonym.ml`: GLiNER,
+spaCy or Presidio). The model run (task accuracy on clear text, tags,
 redaction and stand-ins, plus re-identification) is in `bench/run.py model`; results are not published yet.
 
-## Known limits (alpha 0.1)
+## Known limits (alpha 0.2)
 
-- Names are found by cues (greetings, titles, headers, role words) or because your app lists them; a name with no cue
-  in free text can be missed. Non-Latin scripts and lookalike letters are not handled by the rules.
+- Names are found by cues (greetings, titles, headers, role words), by a list of about 1,150 given names, or because
+  your app lists them. A name that is not on the list and has no cue, a name written in lower case ("talk to dana"),
+  names in non-Latin scripts and lookalike letters can be missed.
+- Dates written in other languages ("12 de marzo") are not found.
+- Health details, job titles and other rare facts are not hidden; together they can point to a person. Use an ML
+  detector, or leave such text out, when it matters.
+- Famous people are faked like anyone else. A search tool still gets the real name (tool arguments are restored), but
+  a question the model answers from its own knowledge loses the person.
 - Binary files (images, PDFs, audio) are passed through untouched; text sent as base64 is decoded, masked and checked.
 - The proxy checks the body and the query string, not request headers (they carry credentials and versions).
 - A receipts log cut short at the end is only detectable against a count or last receipt you kept elsewhere.
