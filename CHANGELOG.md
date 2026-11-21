@@ -31,8 +31,24 @@ them as damaged lines.
   interoperability, and offers a field table for the draft's open question on audit events.
 - Spec 11.2 now says a chain proves order, not completeness; 12.2 notes how SEP-1913 trust annotations could point at
   a record (no claim of adoption); 14 says what a release record does not prove.
-- Vectors: `releases.json`, `checkpoints.json`, a scenario and detect cases for references. Conformance 109 to 214.
+- Vectors: `releases.json`, `checkpoints.json`, a scenario and detect cases for references. Conformance 109 to 237.
 - `opn mcp-gateway --log-dir`, and the proxy, write release records for the handles they fill.
+
+### Fixed after review
+
+- A value stuck to a sensitive reference is no longer hidden by it. The reference grammar is strict (a lower-case
+  kind and a 26-character ULID, ending at a word boundary), and only a detected span lying fully inside a reference is
+  exempt, in masking, in the egress detection pass and in the model-origin report. Known values are never exempt in the
+  egress check.
+- A valid checkpoint past the end of the log now forces `status` `prefix` (reason `cut_off`) even when another
+  checkpoint reaches the last record.
+- `shown` is a hiding commitment: the digest now includes a secret nonce the vault keeps for the handle, so a card's last
+  four digits cannot be brute-forced from it. `verify_log` with the vault recomputes it.
+- `call` follows RFC 8785 for integers past 2^53 in Python as in TypeScript. Arguments with no canonical form (lone
+  surrogates, NaN, infinity) are refused before any fill with the new code `malformed`, with or without a log.
+- `opn mcp-gateway --log-dir` writes each run to its own `<log-dir>/<session-id>/` folder.
+- The TypeScript log writes every byte or throws, so a short write is never followed by a fill.
+- Spec: revealing handles for display is not a release and writes no record.
 
 ### Changed
 

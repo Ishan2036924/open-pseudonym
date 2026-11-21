@@ -131,6 +131,9 @@ s = Session("browse_and_fill", release_log=log,
 s.resolve_args({"text": "{{OTP_1}}"}, Sink("type", "https://acme.com"))   # writes a release record, then fills
 ```
 
+`opn mcp-gateway --log-dir DIR` and the proxy write the same records; the gateway starts a new session on each run, so it
+writes to `DIR/<session-id>/` (one log folder holds one session, which is what lets a checkpoint verify).
+
 A refused handle carries a stable `code` (`e.code`: `wrong_site`, `used_up`, `not_approved`, ...) that never changes
 when the text does.
 

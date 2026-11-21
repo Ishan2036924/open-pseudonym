@@ -460,6 +460,10 @@ CARD `a BRAND card ending NNNN` (Visa, Mastercard, American Express, Discover, e
 (IBAN, CC) ending XXXX`; BANK_ACCOUNT `a bank account number ending NNNN`; ROUTING `a bank routing number`; SSN `a
 social security number`; API_KEY `an API key`; anything else `a <type in lower case with spaces> value`.
 
+`restore` and `stream` with `reveal_handles` set show the real value behind a handle **to the person, for display**.
+That is not a release to a sink and writes no release record. An app must not route revealed text to a tool or a
+model; only `resolve` fills a handle into a tool call, and only it is checked and recorded.
+
 These descriptions tell the model a card's brand and last four digits and an IBAN's country and last four
 characters, which is what people expect to see and lets the model pick the right card. An app that wants to hide
 even that can use `drop` or `fpe` instead of `handle` for those types.
@@ -491,7 +495,7 @@ the line before, whatever its type. Payload (canonical JSON, integers only; sche
 | `data` | The type of the value (`OTP`, `CARD`), or `null` when the handle is unknown. |
 | `source` | The host the value was read from (10.1), or `null`. |
 | `sink` | `tool` and `site`: where it was about to go. `site` is the host only, never a full address (an address can carry secrets in its query). Either may be `null`. |
-| `call` | The digest of the canonical JSON (RFC 8785) of the tool call's arguments **with handles not filled in**. |
+| `call` | The digest of the canonical JSON (RFC 8785) of the tool call's arguments **with handles not filled in**. Numbers are written as JavaScript writes them (an integer past 2^53 as the nearest double, `1e21` as `1e+21`). Arguments with no canonical form (a lone surrogate, a number JSON cannot hold) are refused with `malformed`, and the `call` of that record is the digest of the ASCII text `malformed`. |
 | `outcome`, `decision` | `released` with `allow`, or `refused` with `deny`. |
 | `code`, `reason` | Present on `deny` only: a stable code from the table below, and the refusal text of 10.2. |
 | `authority` | Who allowed it, below. |
@@ -518,9 +522,19 @@ refusal still stands, since nothing was filled either way.
 | `consent` | A person approved through an OAC Consent. | `ref` (the consent's id) and `digest` (the digest of its token), plus `shown`, `by`, `channel` |
 | `policy` | A policy rule decided, and no person was involved: a rule that says `ask` with nobody to ask. | none |
 
-`shown` is the digest of the canonical JSON `{"handle", "description", "tool", "site"}` that the approver was given:
-the handle, the description the model was told (10.3), the tool, and the site as a host (`null` when there is none). A
-client can recompute it, and a verifier can see that what was approved was this handle going to this place.
+`shown` is a **hiding commitment** to what the approver was given: the digest of the canonical JSON
+`{"nonce", "handle", "description", "tool", "site"}`, with the handle, the description the model was told (10.3), the
+tool, and the site as a host (`null` when there is none). The `nonce` is 32 random bytes, written as base64url, that the
+vault keeps in the handle's entry and never writes to a log. It has to be there because a description holds a card's
+brand and last four digits (and an IBAN's or a bank account's last four), so a bare digest could be guessed in a few
+thousand tries by anyone holding the record. A verifier given the vault recomputes `shown` and reports a record whose
+`shown` is not the one the vault gives; without the vault nobody can match it. (The reference SDKs draw the nonce from
+the vault's seeded generator with the purpose `release.nonce.<entry id>`, which keeps the vectors repeatable; a real
+vault's seed is random.)
+
+The other fields hold nothing a guess could confirm: `call` hashes only what the model wrote, with the handle still in
+it, so guessing it tells nobody anything the model did not know; `source`, `sink` and `data` are plain hosts, tool
+names and types; `authority.digest` is the digest of a signed token with its own randomness.
 
 The approval callback of 10.2 may answer with a plain yes or no, which gives `kind` `person` and `shown` only, or
 with an approval that also carries `by`, `channel`, `ref` and `digest`. An app that uses OAC passes the consent's id
@@ -540,8 +554,9 @@ answer of any other shape is a bug in the app and fills nothing.
 | `needs_approval` | `needs the person's approval` | A rule says `ask` and the app has no approval callback. |
 | `not_approved` | `not approved` | The approver said no. |
 | `not_recorded` | `release not recorded` | The release could not be written to the log. |
+| `malformed` | `malformed arguments` | The arguments have no canonical form (see `call`). Checked first, whether or not there is a log, and only for a call that names a handle. |
 
-Authority of a refusal: the first six are `binding`, `needs_approval` is `policy`, `not_approved` is `person` or
+Authority of a refusal: `malformed` and the first six are `binding`, `needs_approval` is `policy`, `not_approved` is `person` or
 `consent` with what the approver gave.
 
 **What a record proves.** A release record proves a decision and its authority: that this handle was allowed, or
@@ -560,17 +575,24 @@ Sensitive References, a pre-SEP draft by Sprinterli
 A host can use both. This section is the boundary between them, and nothing more: **we claim no interoperability with
 that draft**, and we do not resolve, check or issue references.
 
-A sensitive reference has two written forms: `sref:<kind>:<id>` and `⟦sref:<kind>:<id>⟧`, where `kind` is 1 to 32
-and `id` is 20 to 128 characters of ASCII letters, digits, `_` and `-` (the grammar of the draft's wire
-representation, Concept 0.7). The bare form must not follow a letter, digit, `_` or `-`, and must not be followed by
-one. A conforming implementation leaves a reference exactly as written:
+A sensitive reference has two written forms: `sref:<kind>:<id>` and `⟦sref:<kind>:<id>⟧`. This standard reads only
+a strict shape of them: `kind` is 1 to 32 lower-case letters, digits, `_` and `-`, starting with a letter, and `id`
+is exactly a 26-character ULID (Crockford base32, upper case: digits and the letters except I, L, O, U). The draft's
+wire representation (Concept 0.7) allows a looser `id` (20 to 128 characters) and a kind in any case; we leave those
+alone as ordinary text, so that a value cannot hide inside something that looks like a reference. The bare form must
+not follow a letter, digit, `_`, `@`, `.` or `-`, and must not be followed by a letter, digit, `_`, `@` or `-`, or by a
+`.` and one of those (a full stop that ends a sentence is fine). `sref:k:<ULID>.dana@example.org` is not a reference.
+A conforming implementation leaves a reference exactly as written:
 
-1. It is **never masked**: no detector acts inside it, even on digits that look like a card or a phone number, and
-   known values do not match inside it.
+1. It is **never masked**: a detected span that lies **fully inside** a reference is not a value (digits that look like
+   a card, say). A span that reaches outside, such as an address or a card number stuck to the reference, is handled
+   like any other text.
 2. It is **never a stand-in**, and a stand-in is never made for it.
 3. It is **never restored or filled**: restoring leaves it alone even if a stand-in or a digit run of this session sits
    inside it, a stream never cuts one in half, and `{{...}}` handles never resolve to one.
-4. It is **never an egress leak**, and it is never reported as a value the model wrote (10.2).
+4. It is **never an egress leak** from detection, and never reported as a value the model wrote (10.2), for the same
+   reason as rule 1. Known values are the exception: a value the vault or the app lists as known is a leak wherever it
+   appears, including inside a reference. Nothing is exempt there, which is the safe side.
 
 Text that only looks like a reference (`sref:email:short`, a letter in front, a kind longer than 32) is ordinary text.
 A reference is not a secret and holds no value, so none of this hides anything: it keeps references whole, so that
@@ -682,9 +704,10 @@ A verifier given checkpoints and the public key that made them (`anchors`, `anch
 4. If `seq` is within the log and `head` is not the digest of record `seq`, report a problem: `anchor at seq N: head
    does not match receipt N`. The log was changed or replaced.
 5. Report `proven_to`: the highest `seq` of a checkpoint that passed, or null.
-6. Report `status`: `complete` if `proven_to` equals the number of records, otherwise `prefix`; and `reason`: `null`
-   when complete, `no_anchor` when no checkpoint passed, `unanchored_tail` when records come after the last one that
-   passed.
+6. Report `status`: `complete` if `proven_to` equals the number of records **and no valid checkpoint lies past the end**,
+   otherwise `prefix`; and `reason`: `null` when complete, `cut_off` when a valid checkpoint lies past the end (even if
+   another one reaches the last record you have), `no_anchor` when no checkpoint passed, `unanchored_tail` when records
+   come after the last one that passed.
 
 Records after the latest checkpoint are not protected against being cut off. `complete` says nothing about whether
 the records are valid: read the problems too. The signature and the chain are checked whether or not checkpoints are
