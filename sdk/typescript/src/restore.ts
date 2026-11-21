@@ -14,7 +14,7 @@
 import { patterns as sharedPatterns } from "./data.ts";
 import * as dates from "./dates.ts";
 import { fillTemplate } from "./fakes.ts";
-import { HANDLE } from "./handles.ts";
+import { HANDLE, srefRegions } from "./handles.ts";
 import { CASELESS_TYPES, DIGIT_TYPES, digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
 import { cmpCodePoints, escapeRegExp, findAll, splitWs } from "./util.ts";
@@ -22,6 +22,8 @@ import { cmpCodePoints, escapeRegExp, findAll, splitWs } from "./util.ts";
 const NB = "(?<![A-Za-z0-9_])";
 const NA = "(?![A-Za-z0-9_])";
 const TAG = /\[([A-Z][A-Z0-9_]*)_([0-9]+)\]/gu;
+// the tail of a text that could still grow into a sensitive reference (see handles.SREF)
+const SREF_OPEN = /\u27e6?sref:(?:[A-Za-z0-9_-]{0,32}|[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{0,127})$/gu;
 const DIGIT_RUN = /(?<![0-9])\+?[0-9](?:[ .()-]{0,2}[0-9]){5,22}(?![0-9])/gu;
 
 let dateRegexes: [RegExp, number][] | null = null;
@@ -156,6 +158,9 @@ export class Restorer {
         }
       }
     }
+    // a sensitive reference is never touched, even if a stand-in or a digit run sits inside it
+    const regions = srefRegions(text);
+    if (regions.length > 0) return settle(found.filter((m) => !regions.some(([b, e]) => m.start < e && m.end > b)));
     return settle(found);
   }
 
@@ -256,6 +261,11 @@ export class StreamRestorer {
     let cut = this.buf.length - hold;
     // never cut between the two halves of a surrogate pair
     if (cut > 0 && isHigh(this.buf.charCodeAt(cut - 1)) && isLow(this.buf.charCodeAt(cut))) cut -= 1;
+    // hold back a sensitive reference that is still arriving, so a digit run inside it is never restored
+    for (const m of this.buf.matchAll(SREF_OPEN)) cut = Math.min(cut, m.index);
+    for (const [b, e] of srefRegions(context)) {
+      if (b - offset < cut && cut < e - offset) cut = b - offset; // and never cut one in half
+    }
     for (const m of found) {
       const ms = m.start - offset;
       const me = m.end - offset;

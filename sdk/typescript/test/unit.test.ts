@@ -139,7 +139,10 @@ test("egress: a planted leak is found, a clean payload passes, and the receipt c
   assert.throws(() => s.recordEgress(log, planted, "api.example.com"), EgressLeak);
   assert.equal(log.seq, 2);
   const full = verifyLog(dir, signer.publicKey, s.vault);
-  assert.deepEqual({ ...full, last: undefined }, { receipts: 2, rechecked: 2, leaks: 0, problems: [], last: undefined });
+  assert.deepEqual(
+    { receipts: full.receipts, rechecked: full.rechecked, leaks: full.leaks, problems: full.problems },
+    { receipts: 2, rechecked: 2, leaks: 0, problems: [] },
+  );
   assert.match(full.last!, /^sha-256:/);
 
   // a payload swapped after the fact no longer matches its receipt

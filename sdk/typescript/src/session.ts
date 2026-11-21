@@ -11,12 +11,13 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { abaOk, ambiguousNames, cueOnly, luhnOk, ssnOk, stopwords } from "./checks.ts";
 import * as dates from "./dates.ts";
-import { blankStandIns, check as egressCheck, EgressLeak, EgressLog, knownMode, type Leak } from "./egress.ts";
+import { blankStandIns, check as egressCheck, EgressLeak, EgressLog, knownMode, type Leak, type ReleaseEntry } from "./egress.ts";
 import * as fakes from "./fakes.ts";
 import { Ctx, fillTemplate } from "./fakes.ts";
 import { FF1 } from "./fpe.ts";
 import * as handles from "./handles.ts";
-import { HANDLE, HandleRefused, type SinkLike, type SourceLike } from "./handles.ts";
+import { asApproval, HANDLE, HandleRefused, outsideSrefs, type Approval, type RefusalCode, type SinkLike, type SourceLike } from "./handles.ts";
+import { canonical, canonicalArgs, digest } from "./jcs.ts";
 import {
   growNames, KnownDetector, PatternDetector, resolve, resolvePeople, type Detector, type Form, type Span,
 } from "./detect.ts";
@@ -184,7 +185,8 @@ export interface Resolved {
   report: Record<string, any>[];
 }
 
-export type Approve = (handle: string, description: string, sink: SinkLike) => boolean;
+/** Returns true or false, or an `Approval` that also says who allowed it (it ends up in the release record). */
+export type Approve = (handle: string, description: string, sink: SinkLike) => boolean | Approval;
 
 export interface SessionOptions {
   vault?: Vault;
@@ -200,6 +202,11 @@ export interface SessionOptions {
   clock?: () => number;
   /** Asked before a handle is filled in somewhere new (or always, when the rule says `ask`). */
   approve?: Approve;
+  /**
+   * Where release records go (spec 10.4). With one, every decision to fill or refuse a handle is signed and written
+   * there first; if an allowed release cannot be recorded, nothing is filled.
+   */
+  releaseLog?: EgressLog;
   sessionId?: string;
   /**
    * By default every input is treated as real: a real name that happens to equal an earlier fake is masked like any
@@ -217,6 +224,7 @@ export class Session {
   readonly dayfirst: boolean;
   readonly clock: () => number;
   readonly approve: Approve | null;
+  readonly releaseLog: EgressLog | null;
   readonly id: string;
   readonly maskedInput: boolean;
   private readonly patterns: PatternDetector;
@@ -233,6 +241,7 @@ export class Session {
     this.dayfirst = o.dayfirst ?? false;
     this.clock = o.clock ?? (() => Date.now() / 1000);
     this.approve = o.approve ?? null;
+    this.releaseLog = o.releaseLog ?? null;
     this.id = o.sessionId ?? randomUUID().replaceAll("-", "");
     this.maskedInput = o.maskedInput ?? false;
     this.patterns = new PatternDetector(o.extraPatterns ?? [], this.dayfirst, () => this.year());
@@ -303,7 +312,7 @@ export class Session {
   detect(text: string): Span[] {
     const spans = [...this.patterns.detect(text), ...this.knownDetector().detect(text)];
     for (const d of this.extraDetectors) spans.push(...d.detect(text));
-    return growNames(resolvePeople(spans), text)
+    return outsideSrefs(growNames(resolvePeople(spans), text), text)
       .filter((s) => !this.allow.has(s.text.toLowerCase()) && !this.isOurs(s.text));
   }
 
@@ -325,7 +334,7 @@ export class Session {
       // what we just learned (a name, its parts) may appear elsewhere in this same text without a cue,
       // like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
       const current = spans;
-      todo = growNames(resolve(this.knownDetector().detect(text)), text).filter((sp) =>
+      todo = outsideSrefs(growNames(resolve(this.knownDetector().detect(text)), text), text).filter((sp) =>
         !current.some((o) => sp.start < o.end && o.start < sp.end) && !this.allow.has(sp.text.toLowerCase()) &&
         !this.isOurs(sp.text));
       if (todo.length === 0) {
@@ -510,6 +519,7 @@ export class Session {
       expires_at: expires,
       ask: Boolean(rule.options.ask ?? false),
       description: handles.describe(type, real, sites.length > 0 ? sites[0] : null, expires),
+      source: bound,
       sinks: [],
     };
   }
@@ -726,6 +736,10 @@ export class Session {
    * Fakes and tags turn back into real values. Handles are filled in only if their binding allows this sink;
    * otherwise HandleRefused is thrown and nothing is filled. Strings that hold contact or payment details the
    * vault never issued are flagged with origin "model": the model wrote them itself.
+   *
+   * With a `releaseLog`, each decision is signed and written first (spec 10.4): a refusal is recorded as a denial, and
+   * if an allowed release cannot be recorded, nothing is filled, no use is counted, and HandleRefused is thrown with
+   * code "not_recorded".
    */
   resolveArgs(args: any, sink: SinkLike): Resolved {
     if (typeof args === "string" && /^[{[]/.test(stripWs(args))) {
@@ -743,23 +757,39 @@ export class Session {
     const restorer = this.restorer();
     const now = this.now();
     const wanted = new Map<string, Entry>();
+    const authority = new Map<string, ReleaseEntry["authority"]>();
+    const placeOf = (): [string | null, string | null] => [sink.tool ?? null, sink.site ? handles.hostOf(sink.site) : null];
     for (const text of strings(args)) {
       for (const m of findAll(HANDLE, text)) {
         const eid = restorer.handles.get(m[0]);
-        if (eid === undefined) throw new HandleRefused(m[0], "unknown handle");
-        wanted.set(m[0], this.vault.byId(eid)!);
+        if (eid === undefined) this.deny(m[0], null, sink, args, "unknown_handle", "unknown handle", { kind: "binding" });
+        wanted.set(m[0], this.vault.byId(eid!)!);
       }
     }
-    const placeOf = (): [string | null, string | null] => [sink.tool ?? null, sink.site ? handles.hostOf(sink.site) : null];
     for (const [handle, entry] of wanted) {
-      handles.check(handle, entry.meta, sink, now);
+      try {
+        handles.check(handle, entry.meta, sink, now);
+      } catch (exc) {
+        if (exc instanceof HandleRefused) this.deny(handle, entry, sink, args, exc.code!, exc.reason, { kind: "binding" }, exc);
+        throw exc;
+      }
       const place = placeOf();
       const firstTimeHere = !(entry.meta.sinks ?? []).some((p: any[]) => samePlace(p, place));
       if (entry.meta.ask || (firstTimeHere && this.approve !== null)) {
-        if (this.approve === null) throw new HandleRefused(handle, "needs the person's approval");
-        if (!this.approve(handle, entry.meta.description, sink)) throw new HandleRefused(handle, "not approved");
+        if (this.approve === null) {
+          this.deny(handle, entry, sink, args, "needs_approval", "needs the person's approval", { kind: "policy" });
+        }
+        const shown = digest(canonical({ handle, description: entry.meta.description, tool: sink.tool ?? null, site: place[1] }));
+        const verdict = asApproval(this.approve!(handle, entry.meta.description, sink));
+        const kind = verdict.digest !== null ? "consent" : "person";
+        const who = { kind, by: verdict.by, channel: verdict.channel, ref: verdict.ref, digest: verdict.digest, shown };
+        if (!verdict.allowed) this.deny(handle, entry, sink, args, "not_approved", "not approved", who);
+        authority.set(handle, who);
+      } else {
+        authority.set(handle, { kind: "binding" });
       }
     }
+    if (this.releaseLog !== null && wanted.size > 0) this.recordAllowed(wanted, authority, sink, args);
     const report: Record<string, any>[] = [];
     const walk = (v: any, path: string): any => {
       if (typeof v === "string") {
@@ -768,7 +798,7 @@ export class Session {
           report.push({ path, restored: found.length, handles: found.filter((m) => m.kind === "handle").map((m) => m.entryId) });
           return apply(v, found);
         }
-        const kinds = [...new Set(this.patterns.detect(v).map((s) => s.type)
+        const kinds = [...new Set(outsideSrefs(this.patterns.detect(v), v).map((s) => s.type)
           .filter((t) => ["EMAIL", "PHONE", "CARD", "IBAN", "BANK_ACCOUNT", "URL"].includes(t)))].sort();
         if (kinds.length > 0) report.push({ path, origin: "model", types: kinds });
         return v;
@@ -788,6 +818,50 @@ export class Session {
       this.vault.touch();
     }
     return { args: result, report };
+  }
+
+  private releaseEntry(handle: string, entry: Entry | null, sink: SinkLike, call: string, decision: "allow" | "deny",
+                       authority: ReleaseEntry["authority"], code: string | null, reason: string | null,
+                       usesLeft: number | null): ReleaseEntry {
+    return {
+      session: this.id, now: this.now(), handle, data: entry ? entry.type : null, source: entry?.meta.source ?? null,
+      sink: { tool: sink.tool ?? null, site: sink.site ? handles.hostOf(sink.site) : null }, call, decision, authority,
+      code, reason, usesLeft,
+    };
+  }
+
+  /**
+   * Record a refusal (when there is a release log) and throw it. If the denial cannot be recorded the refusal still
+   * stands, since nothing was filled either way.
+   */
+  private deny(handle: string, entry: Entry | null, sink: SinkLike, args: any, code: RefusalCode, reason: string,
+               authority: ReleaseEntry["authority"], exc?: HandleRefused): never {
+    if (this.releaseLog !== null) {
+      try {
+        this.releaseLog.recordRelease(this.releaseEntry(handle, entry, sink, digest(canonicalArgs(args)), "deny", authority,
+          code, reason, entry?.meta.uses_left ?? null));
+      } catch {
+        // the refusal stands
+      }
+    }
+    throw exc ?? new HandleRefused(handle, reason, code);
+  }
+
+  /** Sign and write every allow record in one go, before anything is filled in. Throws not_recorded if it fails. */
+  private recordAllowed(wanted: Map<string, Entry>, authority: Map<string, ReleaseEntry["authority"]>, sink: SinkLike, args: any): void {
+    const first = wanted.keys().next().value as string;
+    try {
+      const call = digest(canonicalArgs(args));
+      const entries: ReleaseEntry[] = [];
+      for (const [handle, entry] of wanted) {
+        const left: number | null = entry.meta.uses_left ?? null;
+        entries.push(this.releaseEntry(handle, entry, sink, call, "allow", authority.get(handle)!, null, null,
+          left !== null ? left - 1 : null));
+      }
+      this.releaseLog!.recordReleases(entries);
+    } catch {
+      throw new HandleRefused(first, "release not recorded", "not_recorded");
+    }
   }
 
   // Egress

@@ -11,17 +11,88 @@ import { stripWs, truthy } from "./util.ts";
 
 export const HANDLE = /\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}/gu;
 
-/** The real value was not filled in. `reason` is one short phrase, safe to show and to log. */
+/**
+ * Stable codes for every way a handle can be refused. The human text of `reason` may be reworded one day; a code
+ * never is, so an app and a release record (spec 10.4) can rely on it.
+ */
+export const CODES = [
+  "unknown_handle", "unbound", "expired", "used_up", "wrong_tool", "wrong_site", "needs_approval", "not_approved",
+  "not_recorded",
+] as const;
+
+export type RefusalCode = (typeof CODES)[number];
+
+/**
+ * The real value was not filled in. `reason` is one short phrase, safe to show and to log; `code` is the stable name
+ * of the reason (one of CODES), or null for a refusal that is not a release decision.
+ */
 export class HandleRefused extends Error {
   readonly handle: string;
   readonly reason: string;
+  readonly code: RefusalCode | null;
 
-  constructor(handle: string, reason: string) {
+  constructor(handle: string, reason: string, code: RefusalCode | null = null) {
     super(`${handle}: ${reason}`);
     this.name = "HandleRefused";
     this.handle = handle;
     this.reason = reason;
+    this.code = code;
   }
+}
+
+/**
+ * What an approval callback may return instead of a plain true or false, so the release record can say who allowed
+ * the release. `ref` and `digest` let an app pass the id and the token digest of an OAC Consent.
+ */
+export interface Approval {
+  allowed: boolean;
+  by?: string | null;
+  channel?: string | null;
+  ref?: string | null;
+  digest?: string | null;
+}
+
+export const DIGEST = /^sha-256:[A-Za-z0-9_-]{43}$/u;
+
+/**
+ * Turn what an approval callback returned (a boolean or an Approval) into an Approval. Anything else is a bug in the
+ * app and throws, so nothing is filled by accident.
+ */
+export function asApproval(answer: unknown): Required<Approval> {
+  let found: Approval;
+  if (typeof answer === "boolean") found = { allowed: answer };
+  else if (answer !== null && typeof answer === "object" && typeof (answer as Approval).allowed === "boolean") found = answer as Approval;
+  else throw new TypeError("an approval callback returns a boolean or an Approval");
+  for (const name of ["by", "channel", "ref"] as const) {
+    const v = found[name];
+    if (v != null && (typeof v !== "string" || v.length === 0 || v.length > 256)) throw new RangeError(`Approval.${name} must be a short string`);
+  }
+  if (found.digest != null && !(typeof found.digest === "string" && DIGEST.test(found.digest))) {
+    throw new RangeError("Approval.digest must look like sha-256:<43 characters>");
+  }
+  return {
+    allowed: found.allowed, by: found.by ?? null, channel: found.channel ?? null, ref: found.ref ?? null,
+    digest: found.digest ?? null,
+  };
+}
+
+// Sensitive References (spec 10.5) are opaque to this SDK: a server keeps the value, the model only carries the
+// reference. They look like `sref:<kind>:<id>` or `⟦sref:<kind>:<id>⟧` (kind 1 to 32, id 20 to 128 characters of
+// letters, digits, "_" and "-"). We never mask one, never make a stand-in for one, never restore or fill one, and never
+// count one as a leak.
+const SREF_BODY = "sref:[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{20,128}";
+export const SREF = new RegExp(`\\u27e6${SREF_BODY}\\u27e7|(?<![A-Za-z0-9_-])${SREF_BODY}(?![A-Za-z0-9_-])`, "gu");
+
+/** Where the sensitive references in `text` are, as [start, end] pairs of UTF-16 offsets. */
+export function srefRegions(text: string): [number, number][] {
+  return [...text.matchAll(SREF)].map((m) => [m.index, m.index + m[0].length] as [number, number]);
+}
+
+/** Drop everything that touches a sensitive reference. `start` and `end` are UTF-16 offsets into `text`. */
+export function outsideSrefs<T extends { start: number; end: number }>(items: T[], text: string): T[] {
+  const regions = srefRegions(text);
+  if (regions.length === 0) return items;
+  return items.filter((it) => !regions.some(([b, e]) => it.start < e && it.end > b));
 }
 
 export interface SourceLike {
@@ -266,12 +337,12 @@ export function note(handle: string, meta: Record<string, any>): string {
 export function check(handle: string, meta: Record<string, any>, sink: SinkLike, now: number): void {
   if (!truthy(meta.sites) && !truthy(meta.tools)) {
     // fail closed: a handle that nobody bound to a site or a tool could otherwise go anywhere
-    throw new HandleRefused(handle, "not bound to a site or tool");
+    throw new HandleRefused(handle, "not bound to a site or tool", "unbound");
   }
-  if (meta.expires_at != null && now >= meta.expires_at) throw new HandleRefused(handle, "expired"); // gone at its expiry second
-  if (meta.uses_left != null && meta.uses_left <= 0) throw new HandleRefused(handle, "already used");
+  if (meta.expires_at != null && now >= meta.expires_at) throw new HandleRefused(handle, "expired", "expired"); // gone at its expiry second
+  if (meta.uses_left != null && meta.uses_left <= 0) throw new HandleRefused(handle, "already used", "used_up");
   const tools: string[] | null | undefined = meta.tools;
-  if (tools && tools.length > 0 && !tools.includes(sink.tool as string)) throw new HandleRefused(handle, "not allowed for this tool");
+  if (tools && tools.length > 0 && !tools.includes(sink.tool as string)) throw new HandleRefused(handle, "not allowed for this tool", "wrong_tool");
   const sites: string[] = meta.sites ?? [];
-  if (sites.length > 0 && !siteMatches(sink.site, sites)) throw new HandleRefused(handle, "bound to a different site");
+  if (sites.length > 0 && !siteMatches(sink.site, sites)) throw new HandleRefused(handle, "bound to a different site", "wrong_site");
 }
