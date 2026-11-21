@@ -1,0 +1,38 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/checkpoint.schema.json",
+ "title": "Open Pseudonym checkpoint payload",
+ "description": "Spec section 11.3. Signed as a compact JWS, typ opn-checkpoint+jws, by a key that is not the log writer's. Names the head of a log: the digest of record seq.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "opn",
+  "type",
+  "session",
+  "seq",
+  "head",
+  "iat"
+ ],
+ "properties": {
+  "opn": {
+   "const": "0.1"
+  },
+  "type": {
+   "const": "checkpoint"
+  },
+  "session": {
+   "type": "string"
+  },
+  "seq": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "head": {
+   "type": "string",
+   "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+  },
+  "iat": {
+   "type": "integer"
+  }
+ }
+}

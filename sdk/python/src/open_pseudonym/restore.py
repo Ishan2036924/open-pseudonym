@@ -20,7 +20,7 @@ from typing import Callable
 from . import dates
 from ._data import patterns as shared_patterns
 from .fakes import fill_template
-from .handles import HANDLE
+from .handles import HANDLE, sref_regions
 from .types import CASELESS_TYPES, DIGIT_TYPES, digits_of
 from .vault import Vault
 
@@ -135,6 +135,9 @@ class Restorer:
                     if hit:
                         real_day = dt.date.fromisoformat(hit[0])
                         found.append(Match(s, e, dates.render(real_day, parsed), hit[1], "date"))
+        regions = sref_regions(text)
+        if regions:  # a sensitive reference is never touched, even if a stand-in or a digit run sits inside it
+            found = [m for m in found if not any(m.start < e and m.end > b for b, e in regions)]
         return _settle(found)
 
     def restore(self, text: str, reveal: Callable[[str], str] | None = None) -> str:
@@ -217,6 +220,11 @@ class StreamRestorer:
         offset = len(self._prev)
         found = r.matches(context, offset, self._reveal)
         cut = len(self._buf) - hold
+        # Never cut a sensitive reference in half: the tail we keep is longer than what comes before a reference's id (39
+        # characters), so by the time a digit run in the id leaves the tail, the reference is long enough to be seen.
+        for b, e in sref_regions(context):
+            if b - offset < cut < e - offset:
+                cut = b - offset
         for m in found:
             ms, me = m.start - offset, m.end - offset
             if ms < cut < me:

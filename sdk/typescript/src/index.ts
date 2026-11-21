@@ -8,9 +8,13 @@
 //     const reply = s.restore(modelReply);   // what the person reads
 
 export { Drbg } from "./drbg.ts";
-export { EgressLeak, EgressLog, verifyLog, type Leak, type LogReport } from "./egress.ts";
+export {
+  EgressLeak, EgressLog, makeCheckpoint, verifyLog, type Leak, type LogReport, type ReleaseEntry, type VerifyOptions,
+} from "./egress.ts";
 export { FF1 } from "./fpe.ts";
-export { HandleRefused, Sink, Source, type SinkLike, type SourceLike } from "./handles.ts";
+export {
+  CODES, HandleRefused, Sink, Source, srefRegions, type Approval, type RefusalCode, type SinkLike, type SourceLike,
+} from "./handles.ts";
 export { canonical, digest } from "./jcs.ts";
 export { Signer, SignatureError, publicKeyFromPem, publicPem, verify } from "./jws.ts";
 export {
@@ -23,4 +27,4 @@ export { StreamRestorer } from "./restore.ts";
 export { Vault, VaultError } from "./vault.ts";
 export type { Detector, Span } from "./detect.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";

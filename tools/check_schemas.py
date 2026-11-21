@@ -1,5 +1,5 @@
-"""Validates the shipped data against the JSON schemas: every profile, the patterns file, the receipt vector, and
-an encrypted vault made on the spot."""
+"""Validates the shipped data against the JSON schemas: every profile, the patterns file, the receipt vector, the
+release records and checkpoints in the vectors, and an encrypted vault made on the spot."""
 
 import json
 import sys
@@ -28,6 +28,29 @@ def main() -> int:
                schema("patterns").iter_errors(json.loads((ROOT / "data/patterns.json").read_text()))]
     body = json.loads((ROOT / "vectors/receipts.json").read_text())["body"]
     errors += [f"receipt vector: {e.message}" for e in schema("egress-receipt").iter_errors(body)]
+    rel, cp = schema("release-record"), schema("checkpoint")
+    releases = json.loads((ROOT / "vectors/releases.json").read_text())
+    for case in releases["cases"]:
+        for i, rec in enumerate(case["records"], start=1):
+            errors += [f"release vector {case['name']!r} record {i}: {e.message}" for e in rel.iter_errors(rec)]
+    # the schema must also refuse what verify_log refuses: a value-shaped field, a code on an allow
+    allow = releases["cases"][0]["records"][1]
+    for name, bad in {"an extra field": {**allow, "value": "482913"}, "a code on an allow": {**allow, "code": "used_up"},
+                      "no authority": {k: v for k, v in allow.items() if k != "authority"}}.items():
+        if not list(rel.iter_errors(bad)):
+            errors.append(f"release schema accepts {name}")
+    sec = ROOT / "vectors/checkpoints.json"
+    doc = json.loads(sec.read_text())
+    from open_pseudonym.jws import verify as _verify, Signer as _Signer  # noqa: E402
+    anchor = _Signer.from_seed(bytes.fromhex(doc["anchor_key_seed"]))
+    for case in doc["cases"]:
+        for tok in case["anchor_tokens"]:
+            try:
+                body = _verify(tok, anchor.public_key, "opn-checkpoint+jws")
+            except Exception:  # signed by another key on purpose, or by the writer; the shape is what we check
+                import base64
+                body = json.loads(base64.urlsafe_b64decode(tok.split(".")[1] + "=="))
+            errors += [f"checkpoint vector {case['name']!r}: {e.message}" for e in cp.iter_errors(body)]
     s = Session("strict", Vault(seed=bytes(32)))
     s.mask("Hi Dana,\nok")
     blob = json.loads(s.vault.encrypt(bytes(32)))

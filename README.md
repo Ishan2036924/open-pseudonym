@@ -117,6 +117,32 @@ opn mcp-gateway --profile browse_and_fill --source-site example.com \
 `--tool-site` is for tools whose target never changes. A browser tool can be steered to any page, so browsers fill
 handles with `HandleFiller`, which reads the real page URL at the moment it types.
 
+## Who allowed it: release records and checkpoints
+
+Every time a handle is filled in, or refused, the session can sign a record of the decision into the same log as the
+egress receipts: which handle, which tool and site, what decided it (the binding, a person, an OAC consent), what the
+person was shown, and a digest of the call with the handle still in it. The record is written first; if it cannot be
+written, nothing is filled in. It never holds the value, or a hash of it.
+
+```python
+log = EgressLog("log", signer)
+s = Session("browse_and_fill", release_log=log,
+            approve=lambda handle, what, sink: Approval(True, by="mia", channel="app"))
+s.resolve_args({"text": "{{OTP_1}}"}, Sink("type", "https://acme.com"))   # writes a release record, then fills
+```
+
+`opn mcp-gateway --log-dir DIR` and the proxy write the same records; the gateway starts a new session on each run, so it
+writes to `DIR/<session-id>/` (one log folder holds one session, which is what lets a checkpoint verify).
+
+A refused handle carries a stable `code` (`e.code`: `wrong_site`, `used_up`, `not_approved`, ...) that never changes
+when the text does.
+
+A chain shows order, not completeness: a log cut short still verifies. A checkpoint, signed by a key the log writer
+does not hold, names the head of the log at one moment. `verify_log(folder, pub, anchors=[...], anchor_key=...)`
+then says how far the log is proven (`proven_to`, `status` of `complete` or `prefix`). `opn checkpoint` makes one;
+`opn verify --anchor FILE --anchor-pub PEM` checks it. Spec 10.4, 10.5 (the boundary with Sensitive References),
+11.2 and 11.3.
+
 ## Levels: let people choose
 
 Not everyone wants the same thing hidden, and that is fine. Products can offer one switch:
@@ -133,7 +159,7 @@ show people. To combine a task with a person's choice, `policy_for("schedule", 2
 lets the level add hiding, never remove it.
 
 Level 3 hides what the rules can recognise. It does not hide health details, job titles or other rare facts that can
-point to a person when put together; see [Known limits](#known-limits-alpha-02).
+point to a person when put together; see [Known limits](#known-limits-alpha-03).
 
 ## Profiles
 
@@ -195,7 +221,7 @@ names your app already knows (`known={"PERSON": contacts}`) or add an ML detecto
 spaCy or Presidio). The model run (task accuracy on clear text, tags,
 redaction and stand-ins, plus re-identification) is in `bench/run.py model`; results are not published yet.
 
-## Known limits (alpha 0.2)
+## Known limits (alpha 0.3)
 
 - Names are found by cues (greetings, titles, headers, role words), by a list of about 1,150 given names, or because
   your app lists them. A name that is not on the list and has no cue, a name written in lower case ("talk to dana"),
@@ -207,7 +233,8 @@ redaction and stand-ins, plus re-identification) is in `bench/run.py model`; res
   a question the model answers from its own knowledge loses the person.
 - Binary files (images, PDFs, audio) are passed through untouched; text sent as base64 is decoded, masked and checked.
 - The proxy checks the body and the query string, not request headers (they carry credentials and versions).
-- A receipts log cut short at the end is only detectable against a count or last receipt you kept elsewhere.
+- A receipts log cut short at the end is only detectable against a count or last receipt you kept elsewhere, or a checkpoint signed by a key the writer does not hold (records after the latest checkpoint are not covered).
+- A release record proves who allowed a secret to be filled in, and when, not that the value reached only that site.
 - Ordinary personal data is restored into any tool call; handles are the part that resists prompt injection.
 - The proxy has no login and is meant for one person on their own machine.
 - Model-based quality results are not published yet.

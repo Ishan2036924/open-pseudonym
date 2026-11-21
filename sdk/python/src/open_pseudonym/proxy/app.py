@@ -88,7 +88,7 @@ class Proxy:
             path = self._vault_path(sid)
             if path and path.exists():
                 vault = Vault.load(path, self.config.vault_key)
-            s = Session(policy, vault, known=self.config.known, session_id=sid)
+            s = Session(policy, vault, known=self.config.known, session_id=sid, release_log=self.log_for(sid))
             self.sessions[sid] = s
             while len(self.sessions) > self.config.max_sessions:
                 self.sessions.popitem(last=False)

@@ -146,3 +146,21 @@ async def test_a_result_with_data_masking_missed_is_withheld():
     async with Client(server) as client:
         r = await client.call_tool("lookup", {})
     assert "123-45-6789" not in json.dumps(r.model_dump(mode="json"))
+
+
+@pytest.mark.anyio
+async def test_middleware_writes_release_records_for_what_it_fills_and_refuses(tmp_path):
+    from open_pseudonym import EgressLog, Signer, verify_log
+
+    signer = Signer.from_seed(bytes(32))
+    s = Session("browse_and_fill", Vault(seed=bytes(32)), release_log=EgressLog(tmp_path, signer, store_payloads=False))
+    mw = PseudonymMiddleware(s, tool_sites={"type_code": "https://acme.com/login"},
+                             source_for=lambda tool, result: Source(sender="no-reply@acme.com"))
+    async with Client(mail_server([], [mw])) as client:
+        await client.call_tool("read_inbox", {})
+        await client.call_tool("type_code", {"code": "{{OTP_1}}"})
+        await client.call_tool("type_code", {"code": "{{OTP_1}}"})
+    report = verify_log(tmp_path, signer.public_key, s.vault)
+    assert (report["releases"], report["problems"]) == (2, [])
+    lines = (tmp_path / "receipts.jsonl").read_text()
+    assert "482913" not in lines

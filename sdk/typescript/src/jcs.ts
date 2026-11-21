@@ -25,6 +25,34 @@ function encode(v: unknown): string {
   throw new TypeError(`cannot sign a ${typeof v}`);
 }
 
+/**
+ * Canonical JSON for tool-call arguments. Unlike `canonical`, it accepts any JSON number (written the way JavaScript
+ * writes them, as RFC 8785 asks), because a model's arguments may hold floats. Not for signed objects.
+ */
+export function canonicalArgs(value: unknown): Buffer {
+  return Buffer.from(encodeLoose(value), "utf-8");
+}
+
+function wellFormed(s: string): string {
+  // a lone surrogate is not text: refuse it, as the Python SDK does (JSON.stringify would escape it instead)
+  if (!s.isWellFormed()) throw new TypeError("a lone surrogate is not text");
+  return s;
+}
+
+function encodeLoose(v: unknown): string {
+  if (typeof v === "string") return JSON.stringify(wellFormed(v));
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new TypeError("NaN and infinity are not JSON");
+    return Object.is(v, -0) ? "0" : String(v);
+  }
+  if (Array.isArray(v)) return "[" + v.map(encodeLoose).join(",") + "]";
+  if (v !== null && typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    return "{" + Object.keys(obj).sort().map((k) => JSON.stringify(wellFormed(k)) + ":" + encodeLoose(obj[k])).join(",") + "}";
+  }
+  return encode(v);
+}
+
 export function b64url(data: Uint8Array): string {
   return Buffer.from(data).toString("base64url");
 }

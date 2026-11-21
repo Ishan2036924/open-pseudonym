@@ -27,9 +27,10 @@ from . import dates, fakes, handles
 from .checks import aba_ok, ambiguous_names, cue_only, luhn_ok, ssn_ok, stopwords
 from .detect import KnownDetector, PatternDetector, Span, grow_names, resolve, resolve_people
 from .egress import EgressLeak, EgressLog, Leak, blank_stand_ins, check as egress_check, known_mode
+from .jcs import canonical_args, digest
 from .fakes import Ctx, fill_template
 from .fpe import FF1
-from .handles import HANDLE, HandleRefused, Sink, Source
+from .handles import HANDLE, Approval, HandleRefused, Sink, Source, as_approval, host_of, inside_sref, sref_regions
 from .policy import Policy, Rule, load_profile
 from .restore import Restorer, StreamRestorer
 from .types import DIGIT_TYPES, digits_of, normalize
@@ -141,9 +142,10 @@ class Session:
         extra_patterns: Iterable[dict] = (),
         dayfirst: bool = False,
         clock: Callable[[], float] | None = None,
-        approve: Callable[[str, str, Sink], bool] | None = None,
+        approve: Callable[[str, str, Sink], bool | Approval] | None = None,
         session_id: str | None = None,
         masked_input: bool = False,
+        release_log: EgressLog | None = None,
     ):
         self.policy = load_profile(policy) if isinstance(policy, str) else policy
         self.vault = vault or Vault()
@@ -153,6 +155,8 @@ class Session:
         self.dayfirst = dayfirst
         self.clock = clock or time.time
         self.approve = approve
+        # With a release log, every decision to fill or refuse a handle is signed and written there first (spec 10.4)
+        self.release_log = release_log
         self.id = session_id or uuid.uuid4().hex
         # By default every input is treated as real: a real name that happens to equal an earlier fake is masked
         # like any other value. Set masked_input=True only if you feed back text that already went through mask().
@@ -220,6 +224,7 @@ class Session:
         for d in self.extra_detectors:
             spans.extend(d.detect(text))
         chosen = grow_names(resolve_people(spans), text)
+        chosen = _outside_srefs(chosen, text)
         return [s for s in chosen if s.text.lower() not in self.allow and not self._is_ours(s.text)]
 
     def _is_ours(self, text: str) -> bool:
@@ -237,7 +242,7 @@ class Session:
                 stand[span] = self._stand_in(span, text, source)
             # what we just learned (a name, its parts) may appear elsewhere in this same text without a cue,
             # like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
-            todo = [sp for sp in grow_names(resolve(self._known_detector().detect(text)), text)
+            todo = [sp for sp in _outside_srefs(grow_names(resolve(self._known_detector().detect(text)), text), text)
                     if not any(sp.start < o.end and o.start < sp.end for o in spans)
                     and sp.text.lower() not in self.allow and not self._is_ours(sp.text)]
             if not todo:
@@ -408,6 +413,7 @@ class Session:
             "expires_at": expires,
             "ask": bool(rule.options.get("ask", False)),
             "description": handles.describe(type_, real, sites[0] if sites else None, expires),
+            "source": source.bound_site() if source is not None else None,
             "sinks": [],
         }
 
@@ -609,6 +615,10 @@ class Session:
         Fakes and tags turn back into real values. Handles are filled in only if their binding allows this sink;
         otherwise HandleRefused is raised and nothing is filled. Strings that hold contact or payment details the
         vault never issued are flagged with origin "model": the model wrote them itself.
+
+        With a `release_log`, each decision is signed and written first (spec 10.4): a refusal is recorded as a
+        denial, and if an allowed release cannot be recorded, nothing is filled, no use is counted, and HandleRefused
+        is raised with code "not_recorded".
         """
         if isinstance(args, str) and args.strip().startswith(("{", "[")):
             try:
@@ -620,22 +630,50 @@ class Session:
                 return Resolved(json.dumps(res.args, ensure_ascii=False, separators=(",", ":")), res.report)
         restorer = self.restorer()
         now = self.now()
-        wanted: dict[str, Entry] = {}
+        place = [sink.tool, handles.host_of(sink.site) if sink.site else None]
+        names: list[str] = []
         for text in _strings(args):
             for m in HANDLE.finditer(text):
-                eid = restorer.handles.get(m[0])
-                if eid is None:
-                    raise HandleRefused(m[0], "unknown handle")
-                wanted[m[0]] = self.vault.by_id(eid)
+                if m[0] not in names:
+                    names.append(m[0])
+        call = MALFORMED_CALL
+        if names:
+            made = _call_digest(args)
+            if made is None:  # lone surrogates, a number JSON cannot hold: nothing is filled, and the refusal is recorded
+                first = restorer.handles.get(names[0])
+                self._deny(names[0], self.vault.by_id(first) if first else None, sink, call, "malformed",
+                           "malformed arguments", {"kind": "binding"})
+            call = made
+        wanted: dict[str, Entry] = {}
+        authority: dict[str, dict] = {}
+        for name in names:
+            eid = restorer.handles.get(name)
+            if eid is None:
+                self._deny(name, None, sink, call, "unknown_handle", "unknown handle", {"kind": "binding"})
+            wanted[name] = self.vault.by_id(eid)
         for handle, entry in wanted.items():
-            handles.check(handle, entry.meta, sink, now)
-            place = [sink.tool, handles.host_of(sink.site) if sink.site else None]
+            try:
+                handles.check(handle, entry.meta, sink, now)
+            except HandleRefused as exc:
+                self._deny(handle, entry, sink, call, exc.code, exc.reason, {"kind": "binding"}, exc)
             first_time_here = place not in entry.meta.get("sinks", [])
             if entry.meta.get("ask") or (first_time_here and self.approve is not None):
                 if self.approve is None:
-                    raise HandleRefused(handle, "needs the person's approval")
-                if not self.approve(handle, entry.meta["description"], sink):
-                    raise HandleRefused(handle, "not approved")
+                    self._deny(handle, entry, sink, call, "needs_approval", "needs the person's approval",
+                               {"kind": "policy"})
+                shown = handles.shown_digest(self.vault.release_nonce(entry), handle, entry.meta["description"],
+                                             sink.tool, place[1])
+                verdict = as_approval(self.approve(handle, entry.meta["description"], sink))
+                who = {"by": verdict.by, "channel": verdict.channel, "ref": verdict.ref, "digest": verdict.digest,
+                       "shown": shown}
+                kind = "consent" if verdict.digest is not None else "person"
+                if not verdict.allowed:
+                    self._deny(handle, entry, sink, call, "not_approved", "not approved", {"kind": kind, **who})
+                authority[handle] = {"kind": kind, **who}
+            else:
+                authority[handle] = {"kind": "binding"}
+        if self.release_log is not None and wanted:
+            self._record_allowed(wanted, authority, sink, call)
         report: list[dict] = []
 
         def walk(v, path):
@@ -647,7 +685,7 @@ class Session:
                     from .restore import apply
 
                     return apply(v, found)
-                kinds = sorted({s.type for s in self._patterns.detect(v)
+                kinds = sorted({s.type for s in _outside_srefs(self._patterns.detect(v), v)
                                 if s.type in ("EMAIL", "PHONE", "CARD", "IBAN", "BANK_ACCOUNT", "URL")})
                 if kinds:
                     report.append({"path": path, "origin": "model", "types": kinds})
@@ -662,11 +700,46 @@ class Session:
         for handle, entry in wanted.items():
             if entry.meta.get("uses_left") is not None:
                 entry.meta["uses_left"] -= 1
-            place = [sink.tool, handles.host_of(sink.site) if sink.site else None]
             if place not in entry.meta["sinks"]:
                 entry.meta["sinks"].append(place)
             self.vault.touch()
         return Resolved(result, report)
+
+    def _release_entry(self, handle: str, entry: Entry | None, sink: Sink, call: str, decision: str,
+                       authority: dict, code: str | None = None, reason: str | None = None,
+                       uses_left: int | None = None) -> dict:
+        meta = entry.meta if entry is not None else {}
+        return {"session": self.id, "now": self.now(), "handle": handle, "data": entry.type if entry else None,
+                "source": meta.get("source"),
+                "sink": {"tool": sink.tool, "site": host_of(sink.site) if sink.site else None}, "call": call,
+                "decision": decision, "authority": authority, "code": code, "reason": reason,
+                "uses_left": uses_left}
+
+    def _deny(self, handle: str, entry: Entry | None, sink: Sink, call: str, code: str, reason: str, authority: dict,
+              exc: HandleRefused | None = None) -> None:
+        """Record a refusal (when there is a release log) and raise it. If the denial cannot be recorded the refusal
+        still stands, since nothing was filled either way."""
+        if self.release_log is not None:
+            try:
+                uses = entry.meta.get("uses_left") if entry is not None else None
+                self.release_log.record_release(**self._release_entry(
+                    handle, entry, sink, call, "deny", authority, code, reason, uses))
+            except Exception:
+                pass
+        raise exc or HandleRefused(handle, reason, code)
+
+    def _record_allowed(self, wanted: dict[str, Entry], authority: dict[str, dict], sink: Sink, call: str) -> None:
+        """Sign and write every allow record in one go, before anything is filled in. Raises not_recorded if it fails."""
+        first = next(iter(wanted))
+        try:
+            entries = []
+            for handle, entry in wanted.items():
+                left = entry.meta.get("uses_left")
+                entries.append(self._release_entry(handle, entry, sink, call, "allow", authority[handle], None, None,
+                                                   left - 1 if left is not None else None))
+            self.release_log.record_releases(entries)
+        except Exception as exc:
+            raise HandleRefused(first, "release not recorded", "not_recorded") from exc
 
     # Egress
 
@@ -684,6 +757,13 @@ class Session:
                 if (span.type, "detected") not in seen:
                     seen.add((span.type, "detected"))
                     leaks.append(Leak(span.type, "detected"))
+        # a value the app listed as known is a leak even inside a sensitive reference: nothing is exempt here (10.5)
+        blanked = blank_stand_ins(text, restorer)
+        for span in grow_names(resolve(self._known_detector().detect(blanked)), blanked):
+            if span.text.lower() not in self.allow and not self._kept(span, text) and not self.vault.is_stand_in(span.text):
+                if (span.type, "detected") not in seen:
+                    seen.add((span.type, "detected"))
+                    leaks.append(Leak(span.type, "detected"))
         return leaks
 
     def record_egress(self, log: EgressLog, payload: bytes, dest: str) -> str:
@@ -693,6 +773,26 @@ class Session:
             raise EgressLeak(leaks)
         return log.record(self.vault, payload, session=self.id, policy_digest=self.policy.digest, dest=dest,
                           now=self.now(), detectors=self.detector_names(), restorer=self.restorer())
+
+
+def _outside_srefs(spans: list[Span], text: str) -> list[Span]:
+    """Drop every span that lies fully inside a sensitive reference: those stay as written (spec 10.5). A span that
+    reaches outside one, a value glued to a reference, is ordinary text and is kept."""
+    regions = sref_regions(text)
+    if not regions:
+        return spans
+    return [sp for sp in spans if not inside_sref(sp.start, sp.end, regions)]
+
+
+MALFORMED_CALL = digest(b"malformed")  # the `call` of a record about arguments that have no canonical form
+
+
+def _call_digest(args: Any) -> str | None:
+    """The digest of the canonical JSON of the arguments, or None when they have no canonical form."""
+    try:
+        return digest(canonical_args(args))
+    except (TypeError, ValueError, OverflowError, RecursionError):  # UnicodeEncodeError is a ValueError
+        return None
 
 
 def content_text(payload: bytes | str) -> str:

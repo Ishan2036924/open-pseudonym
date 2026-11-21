@@ -37,3 +37,28 @@ def test_keygen_mask_restore_verify(tmp_path, capsys):
     (tmp_path / "log" / "payloads" / "000001.bin").write_bytes(b"Elena Ortiz says hi")
     assert main(["--key-dir", str(keys), "verify", str(tmp_path / "log"), "--vault", str(vault)]) == 1
     assert "does not match its digest" in capsys.readouterr().out
+
+
+def test_checkpoint_and_verify_with_an_anchor(tmp_path, capsys):
+    writer_keys, anchor_keys = tmp_path / "writer", tmp_path / "anchor"
+    assert main(["--key-dir", str(writer_keys), "keygen"]) == 0
+    assert main(["--key-dir", str(anchor_keys), "keygen"]) == 0
+    signer = Signer.from_pem((writer_keys / "signing.pem").read_bytes())
+    log = EgressLog(tmp_path / "log", signer, store_payloads=False)
+    for n in range(3):
+        log.record_release(session="s1", now=1793836800 + n, handle="{{OTP_1}}", data="OTP", source="acme.com",
+                           sink={"tool": "type", "site": "acme.com"}, call="sha-256:" + "A" * 43, decision="allow",
+                           authority={"kind": "binding"})
+    capsys.readouterr()
+    pub = str(writer_keys / "signing.pub.pem")
+    assert main(["--key-dir", str(anchor_keys), "checkpoint", str(tmp_path / "log"), "--pub", pub]) == 0
+    token = capsys.readouterr().out.strip()
+    (tmp_path / "cp.txt").write_text(token + "\n")
+    args = ["--key-dir", str(writer_keys), "verify", str(tmp_path / "log"), "--anchor", str(tmp_path / "cp.txt"),
+            "--anchor-pub", str(anchor_keys / "signing.pub.pem")]
+    assert main(args) == 0
+    assert "up to record 3: complete" in capsys.readouterr().out
+    lines = (tmp_path / "log" / "receipts.jsonl").read_text().splitlines()
+    (tmp_path / "log" / "receipts.jsonl").write_text("\n".join(lines[:2]) + "\n")
+    assert main(args) == 1
+    assert "cut off after seq 2" in capsys.readouterr().out

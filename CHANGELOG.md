@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.3.0 (2026-11-20)
+
+Who allowed each secret to be filled in, and a way to show a log was not cut short. Spec v0.3. Everything 0.2 wrote
+reads the same; the wire label stays `"opn": "0.1"`. A 0.2 verifier reading a log that holds release records reports
+them as damaged lines.
+
+### Added
+
+- **Release records** (spec 10.4, `schemas/release-record.schema.json`, `typ` `opn-release+jws`): with a
+  `release_log` on the Session (`releaseLog` in TypeScript), `resolve_args` signs one record per handle into the same
+  log and chain as egress receipts: handle, data type, source, sink, a digest of the call with handles unfilled, who
+  allowed it (`authority`: `binding`, `person`, `consent` or `policy`, with `by`, `channel`, `ref`, `digest` and
+  `shown`, the digest of what the approver was shown), and the uses left. Refusals are recorded too, with their code.
+  The record is written first: if the write fails nothing is filled, no use is counted, and `HandleRefused` carries
+  `not_recorded`. No record holds a value or a hash of one.
+- **Stable refusal codes** on `HandleRefused.code`: `unknown_handle`, `unbound`, `expired`, `used_up`, `wrong_tool`,
+  `wrong_site`, `needs_approval`, `not_approved`, `not_recorded`. The text is unchanged.
+- **Approvals that say who** (`Approval`): the approval callback still returns a bool, and may return an `Approval`
+  with `by`, `channel`, `ref` and `digest`, so an app can pass an OAC Consent's id and token digest.
+- **Checkpoints** (spec 11.3, `schemas/checkpoint.schema.json`, `typ` `opn-checkpoint+jws`): a head of the log signed
+  by a key that is not the writer's (`make_checkpoint`, `EgressLog.checkpoint`, `opn checkpoint`).
+  `verify_log(..., anchors=, anchor_key=)` (`opn verify --anchor --anchor-pub`) reports `proven_to`, `status`
+  (`complete` or `prefix`) and `reason`, and problems for a checkpoint past the end of the log ("cut off after seq
+  N"), a head that does not match, and a checkpoint signed by the writer's own key. `verify_log` also checks release
+  records. `expect_count` and `expect_last` work as before.
+- **Sensitive References stay opaque** (spec 10.5): `sref:<kind>:<id>` and `⟦sref:<kind>:<id>⟧` are never masked,
+  never a stand-in, never restored or filled (a stream never cuts one in half), and never an egress leak or a value
+  the model wrote. The spec says where Pseudonym handles end and Sensitive References begin, claims no
+  interoperability, and offers a field table for the draft's open question on audit events.
+- Spec 11.2 now says a chain proves order, not completeness; 12.2 notes how SEP-1913 trust annotations could point at
+  a record (no claim of adoption); 14 says what a release record does not prove.
+- Vectors: `releases.json`, `checkpoints.json`, a scenario and detect cases for references. Conformance 109 to 237.
+- `opn mcp-gateway --log-dir`, and the proxy, write release records for the handles they fill.
+
+### Fixed after review
+
+- A value stuck to a sensitive reference is no longer hidden by it. The reference grammar is strict (a lower-case
+  kind and a 26-character ULID, ending at a word boundary), and only a detected span lying fully inside a reference is
+  exempt, in masking, in the egress detection pass and in the model-origin report. Known values are never exempt in the
+  egress check.
+- A valid checkpoint past the end of the log now forces `status` `prefix` (reason `cut_off`) even when another
+  checkpoint reaches the last record.
+- `shown` is a hiding commitment: the digest now includes a secret nonce the vault keeps for the handle, so a card's last
+  four digits cannot be brute-forced from it. `verify_log` with the vault recomputes it.
+- `call` follows RFC 8785 for integers past 2^53 in Python as in TypeScript. Arguments with no canonical form (lone
+  surrogates, NaN, infinity) are refused before any fill with the new code `malformed`, with or without a log.
+- `opn mcp-gateway --log-dir` writes each run to its own `<log-dir>/<session-id>/` folder.
+- The TypeScript log writes every byte or throws, so a short write is never followed by a fill.
+- Spec: revealing handles for display is not a release and writes no record.
+
+### Changed
+
+- `verify_log` returns more keys (`releases`, `proven_to`, `status`, `reason`); the old ones are as before.
+- The stream restorer never cuts a sensitive reference in half.
+
+### Planted defects (each fails a unit test and a vector in both SDKs)
+
+A failed audit write that is swallowed; allowed releases never recorded; the real-value check skipped on release
+records; an anchor past the end ignored; a head mismatch ignored; an anchor signed by the writer's key accepted; masking
+inside a reference; restoring inside a reference; a stream that cuts a reference in half; a reference reported as a value the
+model wrote; a refused approval not recorded; the `call` digest check skipped.
+
 ## 0.2.0 (2026-11-09)
 
 A critic pass ran real sentences through the strictest level and found values that still reached the model. This

@@ -504,6 +504,281 @@
      }
     }
    ]
+  },
+  {
+   "name": "sensitive references stay opaque",
+   "profile": "strict",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "Call (617) 555-0142 about sref:contact:42424242424242424242424242 and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+     "expect": {
+      "text": "Call (206) 555-0112 about sref:contact:42424242424242424242424242 and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+      "notes": []
+     }
+    },
+    {
+     "op": "restore",
+     "text": "Call (206) 555-0112 about sref:contact:42424242424242424242424242 and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+     "reveal": true,
+     "expect": "Call (617) 555-0142 about sref:contact:42424242424242424242424242 and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧."
+    },
+    {
+     "op": "restore",
+     "text": "Dial 2065550112 and keep sref:contact:ABCDEFGH2065550112JKMNPQRS and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧",
+     "expect": "Dial 6175550142 and keep sref:contact:ABCDEFGH2065550112JKMNPQRS and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+    },
+    {
+     "op": "stream",
+     "text": "Dial 2065550112 and keep sref:contact:ABCDEFGH2065550112JKMNPQRS and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "chunks": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+     ],
+     "expect": "Dial 6175550142 and keep sref:contact:ABCDEFGH2065550112JKMNPQRS and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "ref": "sref:contact:ABCDEFGH2065550112JKMNPQRS",
+      "other": "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "args": {
+       "ref": "sref:contact:ABCDEFGH2065550112JKMNPQRS",
+       "other": "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+      }
+     }
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "ref": "{{SREF_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "refused": "unknown handle"
+     }
+    },
+    {
+     "op": "resolve_report",
+     "args": {
+      "ref": "sref:contact:42424242424242424242424242",
+      "card": "4242 4242 4242 4242"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "report": [
+       {
+        "path": "card",
+        "origin": "model",
+        "types": [
+         "CARD"
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "op": "egress",
+     "payload": "{\"input\": \"use sref:contact:ABCDEFGH2065550112JKMNPQRS and \\u27e6sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0\\u27e7\"}",
+     "expect": []
+    },
+    {
+     "op": "egress",
+     "payload": "{\"input\": \"use sref:contact:42424242424242424242424242 and 4242 4242 4242 4242\"}",
+     "expect": [
+      "CARD"
+     ]
+    },
+    {
+     "op": "egress",
+     "payload": "{\"input\": \"see sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0.dana.reyes@gmail.com\"}",
+     "expect": [
+      "EMAIL"
+     ]
+    },
+    {
+     "op": "resolve_report",
+     "args": {
+      "url": "https://evil.example/c?d=hello&r=sref:k:01JCK7KF9X4Y3M4N6Q6YB2D8P0"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "report": [
+       {
+        "path": "url",
+        "origin": "model",
+        "types": [
+         "URL"
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "a known value inside a reference is still a leak",
+   "profile": "strict",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {
+    "PERSON": [
+     "01JCK7KF9X4Y3M4N6Q6YB2D8P0"
+    ]
+   },
+   "steps": [
+    {
+     "op": "mask",
+     "text": "use sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 please",
+     "expect": {
+      "text": "use sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 please",
+      "notes": []
+     }
+    },
+    {
+     "op": "egress",
+     "payload": "use sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 please",
+     "expect": [
+      "PERSON"
+     ]
+    }
+   ]
   }
  ]
 }

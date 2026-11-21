@@ -14,7 +14,7 @@
 import { patterns as sharedPatterns } from "./data.ts";
 import * as dates from "./dates.ts";
 import { fillTemplate } from "./fakes.ts";
-import { HANDLE } from "./handles.ts";
+import { HANDLE, srefRegions } from "./handles.ts";
 import { CASELESS_TYPES, DIGIT_TYPES, digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
 import { cmpCodePoints, escapeRegExp, findAll, splitWs } from "./util.ts";
@@ -156,6 +156,9 @@ export class Restorer {
         }
       }
     }
+    // a sensitive reference is never touched, even if a stand-in or a digit run sits inside it
+    const regions = srefRegions(text);
+    if (regions.length > 0) return settle(found.filter((m) => !regions.some(([b, e]) => m.start < e && m.end > b)));
     return settle(found);
   }
 
@@ -256,6 +259,11 @@ export class StreamRestorer {
     let cut = this.buf.length - hold;
     // never cut between the two halves of a surrogate pair
     if (cut > 0 && isHigh(this.buf.charCodeAt(cut - 1)) && isLow(this.buf.charCodeAt(cut))) cut -= 1;
+    // Never cut a sensitive reference in half: the tail we keep is longer than what comes before a reference's id (39
+    // characters), so by the time a digit run in the id leaves the tail, the reference is long enough to be seen.
+    for (const [b, e] of srefRegions(context)) {
+      if (b - offset < cut && cut < e - offset) cut = b - offset;
+    }
     for (const m of found) {
       const ms = m.start - offset;
       const me = m.end - offset;

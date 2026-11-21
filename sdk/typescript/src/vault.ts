@@ -185,6 +185,20 @@ export class Vault {
     return this.fpeKey ?? this.drbg.derive("fpe");
   }
 
+  /**
+   * The secret nonce of a handle entry, drawn once and kept in the entry (so in the encrypted vault, never in a log).
+   * It makes the `shown` commitment of a release record hiding: the description an approver is given holds a card's
+   * last four digits, which a bare digest would give away to anyone who tries the 10,000 possibilities.
+   */
+  releaseNonce(entry: Entry, store = true): string {
+    let n: string | undefined = entry.meta.nonce;
+    if (n === undefined) {
+      n = b64url(this.drbg.derive("release.nonce." + entry.id));
+      if (store) entry.meta.nonce = n;
+    }
+    return n;
+  }
+
   // Saving
 
   toJSON(): Record<string, any> {
