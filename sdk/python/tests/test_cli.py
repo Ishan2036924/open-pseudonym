@@ -1,5 +1,6 @@
 """The opn command: keys, batch masking with one vault across files, restore, verify."""
 
+import json
 import os
 import stat
 
@@ -62,3 +63,23 @@ def test_checkpoint_and_verify_with_an_anchor(tmp_path, capsys):
     (tmp_path / "log" / "receipts.jsonl").write_text("\n".join(lines[:2]) + "\n")
     assert main(args) == 1
     assert "cut off after seq 2" in capsys.readouterr().out
+
+
+def test_verify_checks_each_records_standing_against_the_policies_given(tmp_path, capsys):
+    from open_pseudonym import load_profile
+
+    keys = tmp_path / "keys"
+    assert main(["--key-dir", str(keys), "keygen"]) == 0
+    signer = Signer.from_pem((keys / "signing.pem").read_bytes())
+    log = EgressLog(tmp_path / "log", signer, store_payloads=False)
+    log.record_release(session="s1", now=1793836800, handle="{{OTP_1}}", data="OTP", source="acme.com",
+                       sink={"tool": "type", "site": "acme.com"}, call="sha-256:" + "A" * 43, decision="allow",
+                       authority={"kind": "binding", "rule": "/rules/OTP",
+                                  "policy": load_profile("browse_and_fill").digest})
+    base = ["--key-dir", str(keys), "verify", str(tmp_path / "log")]
+    assert main(base + ["--policy", "browse_and_fill"]) == 0
+    (tmp_path / "p.json").write_text(json.dumps(load_profile("browse_and_fill").to_dict()))
+    assert main(base + ["--policy", str(tmp_path / "p.json")]) == 0
+    capsys.readouterr()
+    assert main(base + ["--policy", "strict"]) == 1
+    assert "authority.policy is not the digest of any policy given" in capsys.readouterr().out

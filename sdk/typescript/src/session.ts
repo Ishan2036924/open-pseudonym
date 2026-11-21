@@ -521,6 +521,10 @@ export class Session {
       description: handles.describe(type, real, sites.length > 0 ? sites[0] : null, expires),
       source: bound,
       sinks: [],
+      // the standing every later decision about this handle rests on: the rule that set its binding and the digest of
+      // the policy it came from (spec 10.4), kept with the entry so a later policy cannot rewrite it
+      rule: this.policy.ruleRef(type),
+      policy: this.policy.digest,
     };
   }
 
@@ -740,8 +744,13 @@ export class Session {
    * With a `releaseLog`, each decision is signed and written first (spec 10.4): a refusal is recorded as a denial, and
    * if an allowed release cannot be recorded, nothing is filled, no use is counted, and HandleRefused is thrown with
    * code "not_recorded".
+   *
+   * `auditId` is the id of the audit event a Sensitive References server wrote before it released values for this same
+   * call (spec 10.5). It is opaque, 1 to 128 characters of A-Z a-z 0-9 . _ -, and goes into every release record of
+   * the call, so the two records join. It is not a value and is never looked up in the vault.
    */
-  resolveArgs(args: any, sink: SinkLike): Resolved {
+  resolveArgs(args: any, sink: SinkLike, opts: { auditId?: string | null } = {}): Resolved {
+    const auditId = handles.checkAuditId(opts.auditId);
     if (typeof args === "string" && /^[{[]/.test(stripWs(args))) {
       let parsed: unknown = null;
       try {
@@ -750,7 +759,7 @@ export class Session {
         parsed = null;
       }
       if (parsed !== null) {
-        const res = this.resolveArgs(parsed, sink);
+        const res = this.resolveArgs(parsed, sink, { auditId });
         return { args: toJson(res.args), report: res.report };
       }
     }
@@ -768,7 +777,7 @@ export class Session {
         // lone surrogates, a number JSON cannot hold: nothing is filled, and the refusal is recorded
         const first = restorer.handles.get(names[0]);
         this.deny(names[0], first !== undefined ? this.vault.byId(first) ?? null : null, sink, call, "malformed",
-          "malformed arguments", { kind: "binding" });
+          "malformed arguments", { kind: "binding" }, undefined, auditId);
       }
       call = made!;
     }
@@ -776,33 +785,36 @@ export class Session {
     const authority = new Map<string, ReleaseEntry["authority"]>();
     for (const name of names) {
       const eid = restorer.handles.get(name);
-      if (eid === undefined) this.deny(name, null, sink, call, "unknown_handle", "unknown handle", { kind: "binding" });
+      if (eid === undefined) this.deny(name, null, sink, call, "unknown_handle", "unknown handle", { kind: "binding" }, undefined, auditId);
       wanted.set(name, this.vault.byId(eid!)!);
     }
     for (const [handle, entry] of wanted) {
       try {
         handles.check(handle, entry.meta, sink, now);
       } catch (exc) {
-        if (exc instanceof HandleRefused) this.deny(handle, entry, sink, call, exc.code!, exc.reason, { kind: "binding" }, exc);
+        if (exc instanceof HandleRefused) {
+          this.deny(handle, entry, sink, call, exc.code!, exc.reason, { kind: "binding", ...standing(entry) }, exc, auditId);
+        }
         throw exc;
       }
       const place = placeOf();
       const firstTimeHere = !(entry.meta.sinks ?? []).some((p: any[]) => samePlace(p, place));
       if (entry.meta.ask || (firstTimeHere && this.approve !== null)) {
         if (this.approve === null) {
-          this.deny(handle, entry, sink, call, "needs_approval", "needs the person's approval", { kind: "policy" });
+          this.deny(handle, entry, sink, call, "needs_approval", "needs the person's approval", { kind: "policy", ...standing(entry) },
+            undefined, auditId);
         }
         const shown = handles.shownDigest(this.vault.releaseNonce(entry), handle, entry.meta.description, sink.tool ?? null, place[1]);
         const verdict = asApproval(this.approve!(handle, entry.meta.description, sink));
         const kind = verdict.digest !== null ? "consent" : "person";
         const who = { kind, by: verdict.by, channel: verdict.channel, ref: verdict.ref, digest: verdict.digest, shown };
-        if (!verdict.allowed) this.deny(handle, entry, sink, call, "not_approved", "not approved", who);
+        if (!verdict.allowed) this.deny(handle, entry, sink, call, "not_approved", "not approved", who, undefined, auditId);
         authority.set(handle, who);
       } else {
-        authority.set(handle, { kind: "binding" });
+        authority.set(handle, { kind: "binding", ...standing(entry) });
       }
     }
-    if (this.releaseLog !== null && wanted.size > 0) this.recordAllowed(wanted, authority, sink, call);
+    if (this.releaseLog !== null && wanted.size > 0) this.recordAllowed(wanted, authority, sink, call, auditId);
     const report: Record<string, any>[] = [];
     const walk = (v: any, path: string): any => {
       if (typeof v === "string") {
@@ -835,11 +847,11 @@ export class Session {
 
   private releaseEntry(handle: string, entry: Entry | null, sink: SinkLike, call: string, decision: "allow" | "deny",
                        authority: ReleaseEntry["authority"], code: string | null, reason: string | null,
-                       usesLeft: number | null): ReleaseEntry {
+                       usesLeft: number | null, auditId: string | null = null): ReleaseEntry {
     return {
       session: this.id, now: this.now(), handle, data: entry ? entry.type : null, source: entry?.meta.source ?? null,
       sink: { tool: sink.tool ?? null, site: sink.site ? handles.hostOf(sink.site) : null }, call, decision, authority,
-      code, reason, usesLeft,
+      code, reason, usesLeft, auditId,
     };
   }
 
@@ -848,11 +860,11 @@ export class Session {
    * stands, since nothing was filled either way.
    */
   private deny(handle: string, entry: Entry | null, sink: SinkLike, call: string, code: RefusalCode, reason: string,
-               authority: ReleaseEntry["authority"], exc?: HandleRefused): never {
+               authority: ReleaseEntry["authority"], exc?: HandleRefused, auditId: string | null = null): never {
     if (this.releaseLog !== null) {
       try {
         this.releaseLog.recordRelease(this.releaseEntry(handle, entry, sink, call, "deny", authority, code, reason,
-          entry?.meta.uses_left ?? null));
+          entry?.meta.uses_left ?? null, auditId));
       } catch {
         // the refusal stands
       }
@@ -861,14 +873,15 @@ export class Session {
   }
 
   /** Sign and write every allow record in one go, before anything is filled in. Throws not_recorded if it fails. */
-  private recordAllowed(wanted: Map<string, Entry>, authority: Map<string, ReleaseEntry["authority"]>, sink: SinkLike, call: string): void {
+  private recordAllowed(wanted: Map<string, Entry>, authority: Map<string, ReleaseEntry["authority"]>, sink: SinkLike, call: string,
+                        auditId: string | null = null): void {
     const first = wanted.keys().next().value as string;
     try {
       const entries: ReleaseEntry[] = [];
       for (const [handle, entry] of wanted) {
         const left: number | null = entry.meta.uses_left ?? null;
         entries.push(this.releaseEntry(handle, entry, sink, call, "allow", authority.get(handle)!, null, null,
-          left !== null ? left - 1 : null));
+          left !== null ? left - 1 : null, auditId));
       }
       this.releaseLog!.recordReleases(entries);
     } catch {
@@ -921,6 +934,19 @@ export class Session {
       restorer: this.restorer(),
     });
   }
+}
+
+/**
+ * The rule and the policy digest a handle's binding came from (spec 10.4), when the entry recorded them. A vault written
+ * before 0.5 has neither, and its records name only the kind.
+ */
+function standing(entry: Entry): { rule?: string; policy?: string } {
+  const rule = entry.meta.rule;
+  const policy = entry.meta.policy;
+  if (typeof rule === "string" && typeof policy === "string" && handles.RULE_REF.test(rule) && handles.DIGEST.test(policy)) {
+    return { rule, policy };
+  }
+  return {};
 }
 
 const MALFORMED_CALL = digest(Buffer.from("malformed")); // the `call` of a record about arguments with no canonical form

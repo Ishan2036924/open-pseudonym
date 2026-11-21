@@ -1,9 +1,12 @@
-# Open Pseudonym v0.3
+# Open Pseudonym v0.4
 
-Status: draft 0.3, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"` (unchanged: policies,
-vault files and receipts written under 0.1 still read the same). Version 0.3 adds two signed record types, the
-release record (10.4) and the checkpoint (11.3), and a boundary for Sensitive References (10.5). Nothing that 0.2
-wrote changes meaning; a 0.2 verifier reading a log that holds release records reports them as damaged lines.
+Status: draft 0.4, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"` (unchanged: policies,
+vault files and receipts written under 0.1 still read the same). Version 0.3 added two signed record types, the
+release record (10.4) and the checkpoint (11.3), and a boundary for Sensitive References (10.5). Version 0.4 adds two
+optional parts to a release record: the standing a decision was made under (`authority.rule` and
+`authority.policy`, 10.4) and the id of a Sensitive References audit event (`audit_id`, 10.5). Nothing that 0.3 wrote
+changes meaning, and every 0.3 record is a valid 0.4 record; a 0.3 verifier reports a record that carries the new
+fields as malformed.
 
 Open Pseudonym is a way to keep personal data away from an AI model while the model still does the task well. Before
 text reaches the model, personal values are replaced with stand-ins chosen for the task at hand. When the model
@@ -486,7 +489,8 @@ the line before, whatever its type. Payload (canonical JSON, integers only; sche
 {"opn": "0.1", "type": "release", "session": "...", "seq": 2, "prev": "sha-256:...", "iat": 1793836800,
  "handle": "{{OTP_1}}", "data": "OTP", "source": "acme.com",
  "sink": {"tool": "type", "site": "acme.com"}, "call": "sha-256:...",
- "outcome": "released", "decision": "allow", "authority": {"kind": "binding"}, "uses_left": 0}
+ "outcome": "released", "decision": "allow",
+ "authority": {"kind": "binding", "rule": "/rules/OTP", "policy": "sha-256:..."}, "uses_left": 0}
 ```
 
 | Field | Meaning |
@@ -500,6 +504,7 @@ the line before, whatever its type. Payload (canonical JSON, integers only; sche
 | `code`, `reason` | Present on `deny` only: a stable code from the table below, and the refusal text of 10.2. |
 | `authority` | Who allowed it, below. |
 | `uses_left` | The uses the handle has left after this decision, when it counts uses. |
+| `audit_id` | Optional: the id of the audit event a Sensitive References server wrote for the same call (10.5). |
 
 **No value, no hash of a value.** A record never holds the real value, or a digest, a prefix, a mask or any other
 function of it: a six-digit code is easy to guess from its hash. `call` is safe because the arguments still hold the
@@ -513,14 +518,36 @@ record. A refusal is recorded too, with `decision: "deny"` and its code; if that
 refusal still stands, since nothing was filled either way.
 
 **Authority.** `authority` has the shape of the authority in OAC 8.1: `kind`, and as they apply `ref`, `digest`,
-`by`, `channel`, `shown`. All values are non-empty strings.
+`by`, `channel`, `shown`, plus the standing `rule` and `policy` below. All values are non-empty strings.
 
 | `kind` | Meaning | Fields |
 |---|---|---|
-| `binding` | The handle's binding allowed it (or refused it), and nobody was asked. | none |
+| `binding` | The handle's binding allowed it (or refused it), and nobody was asked. | `rule` and `policy`, as below |
 | `person` | The app asked a person, through the approval callback. | `shown`; `by` (who), `channel` (where they answered) and `ref` when the app says |
 | `consent` | A person approved through an OAC Consent. | `ref` (the consent's id) and `digest` (the digest of its token), plus `shown`, `by`, `channel` |
-| `policy` | A policy rule decided, and no person was involved: a rule that says `ask` with nobody to ask. | none |
+| `policy` | A policy rule decided, and no person was involved: a rule that says `ask` with nobody to ask. | `rule` and `policy`, as below |
+
+**Standing.** A kind says that a binding or a rule decided, not which one. A participant who records releases on a
+send side put it this way: each release should name the grant's identity and its class, so that a release allowed by
+a narrow binding rule reads differently from one a person waved through
+([yaotsakpo, MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-7063997855)).
+For `binding` and `policy`, `authority` therefore also names the rule and the policy it came from:
+
+| Field | Meaning |
+|---|---|
+| `rule` | The rule that made the handle (10.1), and with it the binding and the `ask` this decision applied: a JSON Pointer (RFC 6901) into the policy document, `/rules/<TYPE>` for the rule of the value's type, or `/default` when the type has no rule of its own and the policy's `default` applied. |
+| `policy` | The digest of the canonical policy document (section 5) the rule is in: the same digest an egress receipt carries as `policy` (11.2). |
+
+Policies have no rule ids of their own; a rule is the entry for a type in the policy's `rules`, or its `default`, so
+the pointer names it with nothing an app has to invent, and the digest names the exact document. The two always
+come together, and only with `binding` and `policy`: a person's answer is named by `by`, `channel`, `ref` and
+`digest`, not by a rule. They are taken from the vault entry, which records them when the handle is made, because the
+binding was set then: an app that later changes the session's policy does not change the standing of a handle it
+already made. They are left out when no rule decided (`unknown_handle`, `malformed`) and when the entry does not
+record them (a vault made under an earlier draft). A verifier **given the policies** finds the one whose digest is `policy`
+(a record naming a digest none of them has is a problem), resolves `rule` in it, and checks that it is a `handle`
+rule and the one that applies to the record's `data` (`/rules/<data>`, or `/default` when the policy has no rule for
+`data`).
 
 `shown` is a **hiding commitment** to what the approver was given: the digest of the canonical JSON
 `{"nonce", "handle", "description", "tool", "site"}`, with the handle, the description the model was told (10.3), the
@@ -534,7 +561,9 @@ vault's seed is random.)
 
 The other fields hold nothing a guess could confirm: `call` hashes only what the model wrote, with the handle still in
 it, so guessing it tells nobody anything the model did not know; `source`, `sink` and `data` are plain hosts, tool
-names and types; `authority.digest` is the digest of a signed token with its own randomness.
+names and types; `authority.digest` is the digest of a signed token with its own randomness; `authority.rule` is a
+pointer, and `authority.policy` the digest of a policy, which holds types and rules, never a hidden value; `audit_id`
+is an opaque id another system made (10.5).
 
 The approval callback of 10.2 may answer with a plain yes or no, which gives `kind` `person` and `shown` only, or
 with an approval that also carries `by`, `channel`, `ref` and `digest`. An app that uses OAC passes the consent's id
@@ -557,7 +586,8 @@ answer of any other shape is a bug in the app and fills nothing.
 | `malformed` | `malformed arguments` | The arguments have no canonical form (see `call`). Checked first, whether or not there is a log, and only for a call that names a handle. |
 
 Authority of a refusal: `malformed` and the first six are `binding`, `needs_approval` is `policy`, `not_approved` is `person` or
-`consent` with what the approver gave.
+`consent` with what the approver gave. Every `binding` and `policy` refusal of a known handle, except `malformed`,
+carries its standing.
 
 **What a record proves.** A release record proves a decision and its authority: that this handle was allowed, or
 refused, for this tool and site, by this binding or this person, and that the record was written first. It does
@@ -598,9 +628,28 @@ Text that only looks like a reference (`sref:email:short`, a letter in front, a 
 A reference is not a secret and holds no value, so none of this hides anything: it keeps references whole, so that
 the host that issued them can still read them.
 
-A release record and the audit event of a reference resolve are the same kind of decision record, so a host that
-uses both may want them to line up. This table is a suggestion for the draft's open question about the minimum audit
-event (OQ-18, "Audit, rate limits and recovery"), not a mapping either project has agreed:
+**Joining the two records.** A release record and the audit event of a reference resolve are the same kind of
+decision record, and a host that uses both can now join them. Since change SC-28 of the draft, a successful resolve
+answers `{"values": {...}, "audit_id": "<id>"}`, where `audit_id` names the audit event the server wrote before it
+released the values; the draft asks a host to keep it in its own record of the release
+([RESOLVER-PROFILE 12.4 and 15](https://github.com/Sprinterli/mcp-sensitive-references/blob/main/RESOLVER-PROFILE.md);
+[Sprinterli, MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-7065740973)).
+A host that resolves the references of a tool call and fills the call's handles passes that id to `resolve` (the
+reference SDKs: `resolve_args(args, sink, audit_id=...)`, `resolveArgs(args, sink, {auditId})`), and every release
+record of the call, allowed or refused, carries it as `audit_id`. Records of one call already share `call`, so the
+server's event, the call and each handle's decision line up. The SDK never resolves the reference itself; it only
+carries the id.
+
+`audit_id` has the draft's shape and no other: a string of 1 to 128 characters from `A-Z a-z 0-9 . _ -`. Anything
+else is a bug in the app: it is refused before any check runs, so nothing is filled, written or counted. The id is
+opaque: it is never looked up in the vault or treated as a value. It is still part of the record, so a verifier given
+the vault reads it with every other field, and a known value inside it is a problem like a value anywhere else in a
+record. A record without `audit_id` is unchanged; a call with no reference, or a server that sends no id, simply has
+none.
+
+This is a join of two records, not interoperability: we still do not resolve, check or issue references, and we
+claim no endorsement by that project or of it. This table is a suggestion for the draft's open question about the
+minimum audit event (OQ-18, "Audit, rate limits and recovery"), not a mapping either project has agreed:
 
 | Resolve audit event (draft, RESOLVER-PROFILE section 15) | Release record |
 |---|---|
@@ -612,7 +661,8 @@ event (OQ-18, "Audit, rate limits and recovery"), not a mapping either project h
 | written before the value leaves; `503 audit_unavailable` if not | audit before release; `not_recorded` |
 | holds no value and no reference in canonical form | holds no value and no hash of one; a reference stays opaque (above) |
 | recorded for each release | recorded for each release **and each refusal**, with a stable `code` |
-| no field for who allowed it, or what they were shown | `authority` (`kind`, `by`, `channel`, `ref`, `digest`) and `shown` |
+| names the authority: the token scopes checked and the sink profile (SC-28) | `authority` (`kind`, `by`, `channel`, `ref`, `digest`), its standing (`rule`, `policy`) and `shown` |
+| the id the answer returns as `audit_id` (SC-28) | `audit_id`, on each record of the same call |
 | no field for what was asked for | `call`, the digest of the arguments with handles unfilled |
 
 ## 11. Egress check and receipts
@@ -662,7 +712,8 @@ A log is a folder holding `receipts.jsonl` (one token per line, each an egress r
 optionally, `payloads/NNNNNN.bin` (the exact bytes of an egress receipt; these hold stand-ins, not real values; a
 release record has none). Verifying a log checks each signature (a line's `typ` says which of the two it is, and any
 other `typ` is damage), that `seq` counts 1, 2, 3..., the `prev` chain, for an egress receipt that `found` is 0, for
-a release record that its fields are the ones 10.4 lists and, given the vault, that no known value appears in it,
+a release record that its fields are the ones 10.4 lists and, given the vault, that no known value appears in it (every field, `audit_id` included), and, given the policies,
+its standing (10.4),
 each stored payload's digest (when a `payloads` folder exists, a missing payload is a
 problem, and so is a stored payload with no receipt), and, given the vault, the check again on each payload. A damaged
 line or a missing `receipts.jsonl` is reported, never fatal, and so are an empty log and, when a vault is given, a

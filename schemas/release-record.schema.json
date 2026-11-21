@@ -159,12 +159,50 @@
     "shown": {
      "type": "string",
      "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    },
+    "rule": {
+     "description": "The rule that set the handle's binding: a JSON Pointer (RFC 6901) into the policy document, /rules/<TYPE> or /default. Only on binding and policy decisions, always with policy.",
+     "type": "string",
+     "pattern": "^/(?:default|rules/[A-Z][A-Z0-9_]{1,31})$"
+    },
+    "policy": {
+     "description": "The digest of the canonical policy document the rule came from, the same digest egress receipts carry as policy (11.2). Always with rule.",
+     "type": "string",
+     "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    }
+   },
+   "dependentRequired": {
+    "rule": [
+     "policy"
+    ],
+    "policy": [
+     "rule"
+    ]
+   },
+   "if": {
+    "required": [
+     "rule"
+    ]
+   },
+   "then": {
+    "properties": {
+     "kind": {
+      "enum": [
+       "binding",
+       "policy"
+      ]
+     }
     }
    }
   },
   "uses_left": {
    "type": "integer",
    "minimum": 0
+  },
+  "audit_id": {
+   "description": "Spec 10.5: the opaque id of the audit event a Sensitive References server wrote before it released values for the same call. Never a value, a reference or a hash of either.",
+   "type": "string",
+   "pattern": "^[A-Za-z0-9._-]{1,128}$"
   }
  },
  "allOf": [

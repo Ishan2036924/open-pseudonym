@@ -155,6 +155,13 @@ writes to `DIR/<session-id>/` (one log folder holds one session, which is what l
 A refused handle carries a stable `code` (`e.code`: `wrong_site`, `used_up`, `not_approved`, ...) that never changes
 when the text does.
 
+A decision no person made names its standing: `authority.rule` (the policy rule that made the handle, as a pointer:
+`/rules/OTP` or `/default`) and `authority.policy` (the digest of that policy, the same one egress receipts carry).
+`verify_log(..., policies=[policy])` and `opn verify --policy NAME_OR_FILE` check both. A host that also resolves
+[Sensitive References](spec/open-pseudonym.md#105-sensitive-references) for the same call passes the server's
+`audit_id` (`resolve_args(args, sink, audit_id=...)`), and every record of the call carries it, so the two audit
+trails join.
+
 A chain shows order, not completeness: a log cut short still verifies. A checkpoint, signed by a key the log writer
 does not hold, names the head of the log at one moment. `verify_log(folder, pub, anchors=[...], anchor_key=...)`
 then says how far the log is proven (`proven_to`, `status` of `complete` or `prefix`). `opn checkpoint` makes one;
@@ -239,7 +246,7 @@ names your app already knows (`known={"PERSON": contacts}`) or add an ML detecto
 spaCy or Presidio). The model run (task accuracy on clear text, tags,
 redaction and stand-ins, plus re-identification) is in `bench/run.py model`; results are not published yet.
 
-## Known limits (alpha 0.4)
+## Known limits (alpha 0.5)
 
 - Names are found by cues (greetings, titles, headers, role words), by a list of about 1,150 given names, or because
   your app lists them. A name that is not on the list and has no cue, a name written in lower case ("talk to dana"),

@@ -169,6 +169,14 @@ export class Policy {
     return this.rules.get(type) ?? this.default;
   }
 
+  /**
+   * Where `ruleFor(type)` sits in this policy's document, as a JSON Pointer (RFC 6901): `/rules/<TYPE>` or `/default`.
+   * With `digest` it names the rule a release record says decided (spec 10.4).
+   */
+  ruleRef(type: string): string {
+    return this.rules.has(type) ? `/rules/${type}` : "/default";
+  }
+
   /** The stricter of two policies, type by type. Ties keep this policy's rule. */
   tighten(other: Policy): Policy {
     const types = new Set([...this.rules.keys(), ...other.rules.keys()]);

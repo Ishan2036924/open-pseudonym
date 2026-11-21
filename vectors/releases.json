@@ -91,7 +91,9 @@
      "code": "wrong_site",
      "reason": "bound to a different site",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 1
     },
@@ -100,7 +102,7 @@
      "type": "release",
      "session": "s1",
      "seq": 2,
-     "prev": "sha-256:1ppl5Q0c4t1D_oAnj8jBd5Vaxx6zsz_vaA20CIrejic",
+     "prev": "sha-256:zIa5diEHbaMNUVh45hNUKPQ0XyO1R15UbM29dWFtMi4",
      "iat": 1793836800,
      "handle": "{{OTP_1}}",
      "data": "OTP",
@@ -113,7 +115,9 @@
      "outcome": "released",
      "decision": "allow",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 0
     },
@@ -122,7 +126,7 @@
      "type": "release",
      "session": "s1",
      "seq": 3,
-     "prev": "sha-256:MQAZ_IWiJGyCm9Sk0rlhNUyRQ7zpSqTddSu1NFr2mN4",
+     "prev": "sha-256:_4D5t4-Hp86FYS_-S5DozyYEdmxkUL0N5sGiL3Snblo",
      "iat": 1793836800,
      "handle": "{{OTP_1}}",
      "data": "OTP",
@@ -137,15 +141,17 @@
      "code": "used_up",
      "reason": "already used",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 0
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ3cm9uZ19zaXRlIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJib3VuZCB0byBhIGRpZmZlcmVudCBzaXRlIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJldmlsLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjoxfQ.9FY8HvYog6-3ijFOW2Fa2clJgR3kJBi9b4pW6DZODIm7xiAwlOmxBk8dwlCtL8WrV-VcwNh8uz1jYlli2UbCDg",
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjoxcHBsNVEwYzR0MURfb0FuajhqQmQ1VmF4eDZ6c3pfdmFBMjBDSXJlamljIiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.G0OLbzL3S1sanmau1cMXdOMF7kk2nUqMWt6obqBcc9eVT5YE7iFe0NvDjuQ54gvIn-odvtZQnUuPD_iojOK8AA",
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ1c2VkX3VwIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2Ijoic2hhLTI1NjpNUUFaX0lXaUpHeUNtOVNrMHJsaE5VeVJRN3pwU3FUZGRTdTFORnIybU40IiwicmVhc29uIjoiYWxyZWFkeSB1c2VkIiwic2VxIjozLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.6ialkZNQavp-lE9GnfeXNIhzCC0V1_fBT0GuCgY14kdN-B3v3_txSs7tMxQ2Nxlq-Op8av_nSSLbI8Y7U3eYCg"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiY29kZSI6Indyb25nX3NpdGUiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6ImJvdW5kIHRvIGEgZGlmZmVyZW50IHNpdGUiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImV2aWwuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjF9.lfa46dgJRrAkc0YLMXLly1aRROtHImE9OMzP48kQMjolBjfGXPKF8YV1z5zKNQVJi3TD_fXuQTogj_yYtfZzDA",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e09UUF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWxlYXNlZCIsInByZXYiOiJzaGEtMjU2OnpJYTVkaUVIYmFNTlVWaDQ1aE5VS1BRMFh5TzFSMTVVYk0yOWRXRnRNaTQiLCJzZXEiOjIsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.FYdvm8YroM68VndkQnrRMr7ropV4-jgp56QBAmK_3k7m-3fkxMKH8gq9qrk1Rh1mxREZFCGT3DefpX6Zhl-RDA",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiY29kZSI6InVzZWRfdXAiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOiJzaGEtMjU2Ol80RDV0NC1IcDg2RllTXy1TNURvenlZRWRteGtVTDBONXNHaUwzU25ibG8iLCJyZWFzb24iOiJhbHJlYWR5IHVzZWQiLCJzZXEiOjMsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.TztfjyIgZvUpbAEIO_oO6WOzIJKrovHGa_OJK232-IG7fgRH8Avglxbcpb15AKlMJWh2dQBwZ3ED1wjR-7zhAQ"
    ]
   },
   {
@@ -482,12 +488,14 @@
      "code": "needs_approval",
      "reason": "needs the person's approval",
      "authority": {
-      "kind": "policy"
+      "kind": "policy",
+      "rule": "/rules/CARD",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      }
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6InBvbGljeSJ9LCJjYWxsIjoic2hhLTI1NjpvZVNGYnFzbHZfeHRWYXNncGUyQlVmalZzd3IwNUF2dmc0RWFJSDNoLVpBIiwiY29kZSI6Im5lZWRzX2FwcHJvdmFsIiwiZGF0YSI6IkNBUkQiLCJkZWNpc2lvbiI6ImRlbnkiLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im5lZWRzIHRoZSBwZXJzb24ncyBhcHByb3ZhbCIsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoic2hvcC5leGFtcGxlIiwidG9vbCI6InR5cGUifSwic291cmNlIjoic2hvcC5leGFtcGxlIiwidHlwZSI6InJlbGVhc2UifQ.cN8RU14-3C4lE1zTiHuHPkhwpu1K7Ydiq10nz31cbUYMQ_T0O1SV6HCPfbmTqb6tMv1W4D4N3hH4t0xeRaryAg"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6InBvbGljeSIsInBvbGljeSI6InNoYS0yNTY6WmRHTnhZeHpLVEdldzV3YTJ0bDVHQlQ3VnZTRGFpVHE0dG1qWnlMckVWdyIsInJ1bGUiOiIvcnVsZXMvQ0FSRCJ9LCJjYWxsIjoic2hhLTI1NjpvZVNGYnFzbHZfeHRWYXNncGUyQlVmalZzd3IwNUF2dmc0RWFJSDNoLVpBIiwiY29kZSI6Im5lZWRzX2FwcHJvdmFsIiwiZGF0YSI6IkNBUkQiLCJkZWNpc2lvbiI6ImRlbnkiLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im5lZWRzIHRoZSBwZXJzb24ncyBhcHByb3ZhbCIsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoic2hvcC5leGFtcGxlIiwidG9vbCI6InR5cGUifSwic291cmNlIjoic2hvcC5leGFtcGxlIiwidHlwZSI6InJlbGVhc2UifQ.LKdRHGRlFLFlOF0TNPE4UfoJW1J7CqRfcH87a2d7o8MlDy3kVdTwctBwZdiu3EgLkSwcQle5BS_mX_mE8SFUDA"
    ]
   },
   {
@@ -549,13 +557,15 @@
      "code": "expired",
      "reason": "expired",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 1
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJleHBpcmVkIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNzQwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJleHBpcmVkIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjF9.w61-FV0efrsTUs-H9WPOwOunnzAO39_FhElJvt_LH1genIK-rTd-rEb4nKbJhezKte096oyG9ilaCVioK1VvAQ"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiY29kZSI6ImV4cGlyZWQiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM3NDAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6ImV4cGlyZWQiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MX0.B6neWngbyE6mv37troaK-TtiUIS59V3D87SYbavuSSAbBpSVjKKPkL_0fxPRapHo5wXf_Ndv86VCkMeL3f0pAQ"
    ]
   },
   {
@@ -614,13 +624,15 @@
      "code": "unbound",
      "reason": "not bound to a site or tool",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 1
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ1bmJvdW5kIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJub3QgYm91bmQgdG8gYSBzaXRlIG9yIHRvb2wiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjpudWxsLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MX0.UPCWe2BlyCDFq5XWS84Ld2l5K1ynF0hl9Q3TqFRAQUmHXE0ieRnrQA3AD7H6ZB5W6yebrdrZDUEXlTcu0EHsBQ"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiY29kZSI6InVuYm91bmQiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im5vdCBib3VuZCB0byBhIHNpdGUgb3IgdG9vbCIsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoiYWNtZS5jb20iLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOm51bGwsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjoxfQ.6kWDqbFjQxvmyuWoIzSd-DLiv8Edsg0fpSRVkzfD1T744AgPZEjA6eH9NOZIGv1rdhqo9veEOjjEGkHnnSsaDA"
    ]
   },
   {
@@ -701,13 +713,15 @@
      "outcome": "released",
      "decision": "allow",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 0
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.XfHJtYH6p2Y_72tNBvU4GgQ1RvFRfT4ST_AkoJWMyp1gDMEyr34GiuCfcF09jRWd9LBAyusMwQH1HBlxJ1CEDw"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e09UUF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWxlYXNlZCIsInByZXYiOm51bGwsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoiYWNtZS5jb20iLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjowfQ.ulo46HOmExxO0jMQNQaUadiL3pJOL3DKVPFOzOYQUMe-gASUmpGXX8IyX_fFgoeWfDmx4VFDhtW7cW3Ohu2WAQ"
    ]
   },
   {
@@ -803,14 +817,16 @@
      "outcome": "released",
      "decision": "allow",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 0
     }
    ],
    "tokens": [
     "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6WU95YnR5bWRoZUROMDExQVdQcTlmTGE5eWJlSXh1X2VSRUotbTdralRoTSIsImNvZGUiOiJtYWxmb3JtZWQiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im1hbGZvcm1lZCBhcmd1bWVudHMiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MX0.ES_0Y0l1Eb2320-jyaYSbw4fG6r7sZNcYJrvhZDwicHUHi91bqTIcxWLVvWMuK8Rf8piDtgBs5hTSCJ4LCuADQ",
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpMU00wUzIzdVZvdVFrTkNnTkVyb1dhc0Q4blRHdm0wVDYxcm1SRXNodWswIiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.uu8Gly88bo3LhMKZIlEY7IbRzryaKbr4-VPMG3cjjq3WWGmsW1dk9S41nfYQ-T3V70HIwP0VCeJ7L61dLjfbCw"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjoxZW1iS3V0N3JzVXV0ZWl4T2h6djZRTWdzVWJ3d0s3RFlHX0l1Rm13VHlZIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e09UUF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWxlYXNlZCIsInByZXYiOiJzaGEtMjU2OkxTTTBTMjN1Vm91UWtOQ2dORXJvV2FzRDhuVEd2bTBUNjFybVJFc2h1azAiLCJzZXEiOjIsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.9HsUXK9cpmpjLLfEtLNeYHt-VOe7DcG2a7ciTGY_U77IK-Utbc5wmxU9v6nbTZrG7z1AFhTNx4lDNnfO2grpDQ"
    ]
   },
   {
@@ -870,13 +886,289 @@
      "outcome": "released",
      "decision": "allow",
      "authority": {
-      "kind": "binding"
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
      },
      "uses_left": 0
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6UlpfZWRubUxEazZOTVl3UktTUHFHLTVNY3QzUzRZcmh0d0pxRk1xUnhZbyIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.OGFd7HGeUYlOaoM8vpN_W7k5UY-RH-9HDIW_c4pP7lXLR9ufp6fVT8363CWpVAWA6-6TVhH5h9ahYRKm92pEAg"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2OlpkR054WXh6S1RHZXc1d2EydGw1R0JUN1Z2U0RhaVRxNHRtalp5THJFVnciLCJydWxlIjoiL3J1bGVzL09UUCJ9LCJjYWxsIjoic2hhLTI1NjpSWl9lZG5tTERrNk5NWXdSS1NQcUctNU1jdDNTNFlyaHR3SnFGTXFSeFlvIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e09UUF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWxlYXNlZCIsInByZXYiOm51bGwsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoiYWNtZS5jb20iLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjowfQ.YH0vjh2q-FjF7SrQ8vmYASMZwTSS7mpq1jrrPNHAZbiNafnMrFzAkTDoqcdzThrT0Iq2_s5YS6er1RoObq4LDQ"
+   ]
+  },
+  {
+   "name": "a Sensitive References audit id joins the records of its call; a malformed one fills and writes nothing",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://evil.example"
+     },
+     "audit_id": "evt_01JD8Z.r-7"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     },
+     "audit_id": ""
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     },
+     "audit_id": "evt 01JD8Z/r-8"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     },
+     "audit_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     },
+     "audit_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
+   ],
+   "results": [
+    {
+     "refused": "bound to a different site",
+     "code": "wrong_site"
+    },
+    {
+     "invalid": "audit_id"
+    },
+    {
+     "invalid": "audit_id"
+    },
+    {
+     "invalid": "audit_id"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "482913"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "evil.example"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "wrong_site",
+     "reason": "bound to a different site",
+     "authority": {
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+     },
+     "uses_left": 1,
+     "audit_id": "evt_01JD8Z.r-7"
+    },
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 2,
+     "prev": "sha-256:nFyuu8ePSe3eEL9gXJHbgtyf6b-HJMX1I7ePQOFpLYc",
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding",
+      "rule": "/rules/OTP",
+      "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+     },
+     "uses_left": 0,
+     "audit_id": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdWRpdF9pZCI6ImV2dF8wMUpEOFouci03IiwiYXV0aG9yaXR5Ijp7ImtpbmQiOiJiaW5kaW5nIiwicG9saWN5Ijoic2hhLTI1NjpaZEdOeFl4ektUR2V3NXdhMnRsNUdCVDdWdlNEYWlUcTR0bWpaeUxyRVZ3IiwicnVsZSI6Ii9ydWxlcy9PVFAifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ3cm9uZ19zaXRlIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJib3VuZCB0byBhIGRpZmZlcmVudCBzaXRlIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJldmlsLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjoxfQ.Qwo-Uh2df0kY1p1ZaZxtMSETUp_ZaRy89OmHeHa3hST37nfQD6NTrKKlu5qbqjC5EnvR0p9ISPyY8d_olc2dAg",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdWRpdF9pZCI6IkVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFIiwiYXV0aG9yaXR5Ijp7ImtpbmQiOiJiaW5kaW5nIiwicG9saWN5Ijoic2hhLTI1NjpaZEdOeFl4ektUR2V3NXdhMnRsNUdCVDdWdlNEYWlUcTR0bWpaeUxyRVZ3IiwicnVsZSI6Ii9ydWxlcy9PVFAifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpuRnl1dThlUFNlM2VFTDlnWEpIYmd0eWY2Yi1ISk1YMUk3ZVBRT0ZwTFljIiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.C87NpjEgsq2BBnLx9ZJdweYCuYnhxRBuLZxrbmazRyhIzrPjx37-t8dVl_w9MSeS_UV_s4q8du07n68JRAqwCA"
+   ]
+  },
+  {
+   "name": "a policy's default rule decided, and the record names it",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "t": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "click",
+      "site": "https://acme.com/login"
+     }
+    },
+    {
+     "args": {
+      "t": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
+   ],
+   "policy": {
+    "opn": "0.1",
+    "type": "policy",
+    "id": "handles_by_default",
+    "description": "Every value is a handle that only the type tool fills.",
+    "rules": {},
+    "default": {
+     "action": "handle",
+     "tools": [
+      "type"
+     ]
+    },
+    "allow": []
+   },
+   "results": [
+    {
+     "refused": "not allowed for this tool",
+     "code": "wrong_tool"
+    },
+    {
+     "args": {
+      "t": "482913"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "click",
+      "site": "acme.com"
+     },
+     "call": "sha-256:4qcXJQmaZXDNSqZGp0MYOSvZgnbp-PVx4HSiXHsH2R8",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "wrong_tool",
+     "reason": "not allowed for this tool",
+     "authority": {
+      "kind": "binding",
+      "rule": "/default",
+      "policy": "sha-256:mN4LH6bWpcyCI75WRhdRHNFAiN8BeyuqrTTvpdK6nDU"
+     }
+    },
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 2,
+     "prev": "sha-256:2gLARb_noA3ZCViOMW99SgUAz3s89DrnJ2j9DoexgEw",
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:4qcXJQmaZXDNSqZGp0MYOSvZgnbp-PVx4HSiXHsH2R8",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding",
+      "rule": "/default",
+      "policy": "sha-256:mN4LH6bWpcyCI75WRhdRHNFAiN8BeyuqrTTvpdK6nDU"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2Om1ONExINmJXcGN5Q0k3NVdSaGRSSE5GQWlOOEJleXVxclRUdnBkSzZuRFUiLCJydWxlIjoiL2RlZmF1bHQifSwiY2FsbCI6InNoYS0yNTY6NHFjWEpRbWFaWEROU3FaR3AwTVlPU3ZaZ25icC1QVng0SFNpWEhzSDJSOCIsImNvZGUiOiJ3cm9uZ190b29sIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJub3QgYWxsb3dlZCBmb3IgdGhpcyB0b29sIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJjbGljayJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIn0.KFTOhV2uLjHBHAzL79VZ9aZcRROf7z-RbrlYoV8EbptnzxXyUqvusOAgtjHPlDTmFKmfOrddQkE0fDJ4K-XLBg",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmciLCJwb2xpY3kiOiJzaGEtMjU2Om1ONExINmJXcGN5Q0k3NVdSaGRSSE5GQWlOOEJleXVxclRUdnBkSzZuRFUiLCJydWxlIjoiL2RlZmF1bHQifSwiY2FsbCI6InNoYS0yNTY6NHFjWEpRbWFaWEROU3FaR3AwTVlPU3ZaZ25icC1QVng0SFNpWEhzSDJSOCIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjoyZ0xBUmJfbm9BM1pDVmlPTVc5OVNnVUF6M3M4OURybkoyajlEb2V4Z0V3Iiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UifQ.utGDDPFoU7qdgqhp2PmydXT0PeLi5gBLBNkdhbVfYVkQLeTpu826X5kvqeuq3y1RIjRZLsH1yRsn2KGzX5VxAw"
    ]
   }
  ],
@@ -1293,6 +1585,523 @@
      "kind": "person",
      "by": "code 482913"
     }
+   },
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": "Your Acme verification code is 482913. It expires in 10 minutes.",
+   "problems": [
+    "release 1: 1 known value(s) found in the record"
+   ]
+  },
+  {
+   "name": "a binding with its standing, checked against its policy",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/OTP",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "policies": [
+    "browse_and_fill"
+   ],
+   "problems": []
+  },
+  {
+   "name": "a policy decision with its standing, checked against its policy",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{CARD_1}}",
+    "data": "CARD",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "deny",
+    "authority": {
+     "kind": "policy",
+     "rule": "/rules/CARD",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    },
+    "code": "needs_approval",
+    "reason": "needs the person's approval"
+   },
+   "policies": [
+    "strict",
+    "browse_and_fill"
+   ],
+   "problems": []
+  },
+  {
+   "name": "a default rule, checked against its policy",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/default",
+     "policy": "sha-256:mN4LH6bWpcyCI75WRhdRHNFAiN8BeyuqrTTvpdK6nDU"
+    }
+   },
+   "policies": [
+    {
+     "opn": "0.1",
+     "type": "policy",
+     "id": "handles_by_default",
+     "description": "Every value is a handle that only the type tool fills.",
+     "rules": {},
+     "default": {
+      "action": "handle",
+      "tools": [
+       "type"
+      ]
+     },
+     "allow": []
+    }
+   ],
+   "problems": []
+  },
+  {
+   "name": "a standing whose policy was not given",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/OTP",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "policies": [
+    "strict"
+   ],
+   "problems": [
+    "release 1: authority.policy is not the digest of any policy given"
+   ]
+  },
+  {
+   "name": "a standing that names the rule of another type",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/CARD",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "policies": [
+    "browse_and_fill"
+   ],
+   "problems": [
+    "release 1: authority.rule is not the handle rule for the record's data type in that policy"
+   ]
+  },
+  {
+   "name": "a standing that names the default where the type has its own rule",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/default",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "policies": [
+    "browse_and_fill"
+   ],
+   "problems": [
+    "release 1: authority.rule is not the handle rule for the record's data type in that policy"
+   ]
+  },
+  {
+   "name": "a standing that names a rule that is not a handle",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "EMAIL",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/EMAIL",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "policies": [
+    "browse_and_fill"
+   ],
+   "problems": [
+    "release 1: authority.rule is not the handle rule for the record's data type in that policy"
+   ]
+  },
+  {
+   "name": "a standing is not checked when no policy is given",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/CARD",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "problems": []
+  },
+  {
+   "name": "a rule without its policy",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/OTP"
+    }
+   },
+   "problems": [
+    "release 1: authority.rule or authority.policy is not valid"
+   ]
+  },
+  {
+   "name": "a policy without its rule",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "binding",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "problems": [
+    "release 1: authority.rule or authority.policy is not valid"
+   ]
+  },
+  {
+   "name": "a standing on a person's answer",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "person",
+     "by": "mia",
+     "rule": "/rules/OTP",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "problems": [
+    "release 1: authority.rule or authority.policy is not valid"
+   ]
+  },
+  {
+   "name": "a rule that is not a pointer into the policy",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "binding",
+     "rule": "OTP",
+     "policy": "sha-256:ZdGNxYxzKTGew5wa2tl5GBT7VvSDaiTq4tmjZyLrEVw"
+    }
+   },
+   "problems": [
+    "release 1: authority.rule or authority.policy is not valid"
+   ]
+  },
+  {
+   "name": "a policy that is not a digest",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "binding",
+     "rule": "/rules/OTP",
+     "policy": "browse_and_fill"
+    }
+   },
+   "problems": [
+    "release 1: authority.rule or authority.policy is not valid"
+   ]
+  },
+  {
+   "name": "an audit id",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": "evt_01JD8Z.r-7"
+   },
+   "problems": []
+  },
+  {
+   "name": "an empty audit id",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": ""
+   },
+   "problems": [
+    "release 1: audit_id is not valid"
+   ]
+  },
+  {
+   "name": "an audit id of 129 characters",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   },
+   "problems": [
+    "release 1: audit_id is not valid"
+   ]
+  },
+  {
+   "name": "an audit id with a space and a slash",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": "evt 01/2"
+   },
+   "problems": [
+    "release 1: audit_id is not valid"
+   ]
+  },
+  {
+   "name": "an audit id that is not a string",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": 7
+   },
+   "problems": [
+    "release 1: audit_id is not valid"
+   ]
+  },
+  {
+   "name": "a real value hidden in an audit id",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "audit_id": "otp-482913"
    },
    "profile": "browse_and_fill",
    "seed": "0000000000000000000000000000000000000000000000000000000000000000",

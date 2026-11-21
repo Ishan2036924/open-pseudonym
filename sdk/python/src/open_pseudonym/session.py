@@ -415,6 +415,10 @@ class Session:
             "description": handles.describe(type_, real, sites[0] if sites else None, expires),
             "source": source.bound_site() if source is not None else None,
             "sinks": [],
+            # the standing every later decision about this handle rests on: the rule that set its binding and the
+            # digest of the policy it came from (spec 10.4), kept with the entry so a later policy cannot rewrite it
+            "rule": self.policy.rule_ref(type_),
+            "policy": self.policy.digest,
         }
 
     def _fpe(self, type_: str, real: str) -> str:
@@ -609,7 +613,7 @@ class Session:
             return [self.restore_keep_handles(v) for v in value]
         return value
 
-    def resolve_args(self, args: Any, sink: Sink) -> Resolved:
+    def resolve_args(self, args: Any, sink: Sink, *, audit_id: str | None = None) -> Resolved:
         """Restore a tool call's arguments right before the tool runs.
 
         Fakes and tags turn back into real values. Handles are filled in only if their binding allows this sink;
@@ -619,14 +623,19 @@ class Session:
         With a `release_log`, each decision is signed and written first (spec 10.4): a refusal is recorded as a
         denial, and if an allowed release cannot be recorded, nothing is filled, no use is counted, and HandleRefused
         is raised with code "not_recorded".
+
+        `audit_id` is the id of the audit event a Sensitive References server wrote before it released values for this
+        same call (spec 10.5). It is opaque, 1 to 128 characters of A-Z a-z 0-9 . _ -, and goes into every release
+        record of the call, so the two records join. It is not a value and is never looked up in the vault.
         """
+        audit_id = handles.check_audit_id(audit_id)
         if isinstance(args, str) and args.strip().startswith(("{", "[")):
             try:
                 parsed = json.loads(args)
             except ValueError:
                 parsed = None
             if parsed is not None:
-                res = self.resolve_args(parsed, sink)
+                res = self.resolve_args(parsed, sink, audit_id=audit_id)
                 return Resolved(json.dumps(res.args, ensure_ascii=False, separators=(",", ":")), res.report)
         restorer = self.restorer()
         now = self.now()
@@ -642,25 +651,27 @@ class Session:
             if made is None:  # lone surrogates, a number JSON cannot hold: nothing is filled, and the refusal is recorded
                 first = restorer.handles.get(names[0])
                 self._deny(names[0], self.vault.by_id(first) if first else None, sink, call, "malformed",
-                           "malformed arguments", {"kind": "binding"})
+                           "malformed arguments", {"kind": "binding"}, audit=audit_id)
             call = made
         wanted: dict[str, Entry] = {}
         authority: dict[str, dict] = {}
         for name in names:
             eid = restorer.handles.get(name)
             if eid is None:
-                self._deny(name, None, sink, call, "unknown_handle", "unknown handle", {"kind": "binding"})
+                self._deny(name, None, sink, call, "unknown_handle", "unknown handle", {"kind": "binding"},
+                           audit=audit_id)
             wanted[name] = self.vault.by_id(eid)
         for handle, entry in wanted.items():
             try:
                 handles.check(handle, entry.meta, sink, now)
             except HandleRefused as exc:
-                self._deny(handle, entry, sink, call, exc.code, exc.reason, {"kind": "binding"}, exc)
+                self._deny(handle, entry, sink, call, exc.code, exc.reason, {"kind": "binding", **_standing(entry)},
+                           exc, audit=audit_id)
             first_time_here = place not in entry.meta.get("sinks", [])
             if entry.meta.get("ask") or (first_time_here and self.approve is not None):
                 if self.approve is None:
                     self._deny(handle, entry, sink, call, "needs_approval", "needs the person's approval",
-                               {"kind": "policy"})
+                               {"kind": "policy", **_standing(entry)}, audit=audit_id)
                 shown = handles.shown_digest(self.vault.release_nonce(entry), handle, entry.meta["description"],
                                              sink.tool, place[1])
                 verdict = as_approval(self.approve(handle, entry.meta["description"], sink))
@@ -668,12 +679,13 @@ class Session:
                        "shown": shown}
                 kind = "consent" if verdict.digest is not None else "person"
                 if not verdict.allowed:
-                    self._deny(handle, entry, sink, call, "not_approved", "not approved", {"kind": kind, **who})
+                    self._deny(handle, entry, sink, call, "not_approved", "not approved", {"kind": kind, **who},
+                               audit=audit_id)
                 authority[handle] = {"kind": kind, **who}
             else:
-                authority[handle] = {"kind": "binding"}
+                authority[handle] = {"kind": "binding", **_standing(entry)}
         if self.release_log is not None and wanted:
-            self._record_allowed(wanted, authority, sink, call)
+            self._record_allowed(wanted, authority, sink, call, audit_id)
         report: list[dict] = []
 
         def walk(v, path):
@@ -707,28 +719,29 @@ class Session:
 
     def _release_entry(self, handle: str, entry: Entry | None, sink: Sink, call: str, decision: str,
                        authority: dict, code: str | None = None, reason: str | None = None,
-                       uses_left: int | None = None) -> dict:
+                       uses_left: int | None = None, audit: str | None = None) -> dict:
         meta = entry.meta if entry is not None else {}
         return {"session": self.id, "now": self.now(), "handle": handle, "data": entry.type if entry else None,
                 "source": meta.get("source"),
                 "sink": {"tool": sink.tool, "site": host_of(sink.site) if sink.site else None}, "call": call,
                 "decision": decision, "authority": authority, "code": code, "reason": reason,
-                "uses_left": uses_left}
+                "uses_left": uses_left, "audit_id": audit}
 
     def _deny(self, handle: str, entry: Entry | None, sink: Sink, call: str, code: str, reason: str, authority: dict,
-              exc: HandleRefused | None = None) -> None:
+              exc: HandleRefused | None = None, *, audit: str | None = None) -> None:
         """Record a refusal (when there is a release log) and raise it. If the denial cannot be recorded the refusal
         still stands, since nothing was filled either way."""
         if self.release_log is not None:
             try:
                 uses = entry.meta.get("uses_left") if entry is not None else None
                 self.release_log.record_release(**self._release_entry(
-                    handle, entry, sink, call, "deny", authority, code, reason, uses))
+                    handle, entry, sink, call, "deny", authority, code, reason, uses, audit))
             except Exception:
                 pass
         raise exc or HandleRefused(handle, reason, code)
 
-    def _record_allowed(self, wanted: dict[str, Entry], authority: dict[str, dict], sink: Sink, call: str) -> None:
+    def _record_allowed(self, wanted: dict[str, Entry], authority: dict[str, dict], sink: Sink, call: str,
+                        audit: str | None = None) -> None:
         """Sign and write every allow record in one go, before anything is filled in. Raises not_recorded if it fails."""
         first = next(iter(wanted))
         try:
@@ -736,7 +749,7 @@ class Session:
             for handle, entry in wanted.items():
                 left = entry.meta.get("uses_left")
                 entries.append(self._release_entry(handle, entry, sink, call, "allow", authority[handle], None, None,
-                                                   left - 1 if left is not None else None))
+                                                   left - 1 if left is not None else None, audit))
             self.release_log.record_releases(entries)
         except Exception as exc:
             raise HandleRefused(first, "release not recorded", "not_recorded") from exc
@@ -782,6 +795,15 @@ def _outside_srefs(spans: list[Span], text: str) -> list[Span]:
     if not regions:
         return spans
     return [sp for sp in spans if not inside_sref(sp.start, sp.end, regions)]
+
+
+def _standing(entry: Entry) -> dict:
+    """The rule and the policy digest a handle's binding came from (spec 10.4), when the entry recorded them. A vault
+    written before 0.5 has neither, and its records name only the kind."""
+    rule, policy = entry.meta.get("rule"), entry.meta.get("policy")
+    if isinstance(rule, str) and isinstance(policy, str) and handles.RULE_REF.fullmatch(rule) and handles.DIGEST.fullmatch(policy):
+        return {"rule": rule, "policy": policy}
+    return {}
 
 
 MALFORMED_CALL = digest(b"malformed")  # the `call` of a record about arguments that have no canonical form

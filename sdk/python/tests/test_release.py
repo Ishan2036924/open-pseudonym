@@ -15,6 +15,7 @@ from open_pseudonym import (
 )
 from open_pseudonym.jcs import canonical, canonical_args, digest
 from open_pseudonym.jws import verify
+from open_pseudonym.policy import Policy, load_profile
 
 from conftest import NOW
 
@@ -101,7 +102,8 @@ def test_allowed_by_binding_is_recorded_before_it_is_filled(make_session, tmp_pa
         "opn": "0.1", "type": "release", "session": s.id, "seq": 1, "prev": None, "iat": NOW, "handle": "{{OTP_1}}",
         "data": "OTP", "source": "acme.com", "sink": {"tool": "type", "site": "acme.com"},
         "call": digest(canonical({"selector": "#otp", "text": "{{OTP_1}}"})), "outcome": "released",
-        "decision": "allow", "authority": {"kind": "binding"}, "uses_left": 0,
+        "decision": "allow", "authority": {"kind": "binding", "rule": "/rules/OTP", "policy": s.policy.digest},
+        "uses_left": 0,
     }
     assert verify_log(tmp_path, WRITER.public_key, s.vault)["problems"] == []
 
@@ -181,7 +183,8 @@ def test_a_refused_approval_and_a_missing_approver_are_recorded(make_session, tm
     with pytest.raises(HandleRefused):
         s2.resolve_args({"t": "{{CARD_1}}"}, Sink("type", "https://shop.example"))
     rec = records(tmp_path / "b")[0]
-    assert (rec["code"], rec["authority"]) == ("needs_approval", {"kind": "policy"})
+    assert (rec["code"], rec["authority"]) == ("needs_approval", {"kind": "policy", "rule": "/rules/CARD",
+                                                                  "policy": s2.policy.digest})
 
 
 def test_an_unknown_handle_is_a_recorded_denial_with_no_data(make_session, tmp_path):
@@ -625,3 +628,171 @@ def test_verify_log_recomputes_shown_from_the_vault(make_session, tmp_path):
     forge(tmp_path / "b", handle="{{OTP_7}}", authority={"kind": "person", "shown": digest(b"what they saw")})
     assert verify_log(tmp_path / "b", WRITER.public_key, s.vault)["problems"] == [
         "release 1: shown names a handle the vault does not hold"]
+
+
+# The standing a release was decided under (0.5, from yaotsakpo on MCP PR 1913), and a Sensitive References audit id
+
+
+def test_a_binding_names_the_rule_and_the_policy_it_came_from(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    with pytest.raises(HandleRefused):
+        s.resolve_args({"text": "{{OTP_1}}"}, Sink("type", "https://evil.example"))
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    want = {"rule": "/rules/OTP", "policy": load_profile("browse_and_fill").digest}
+    assert [r["authority"] for r in records(tmp_path)] == [{"kind": "binding", **want}] * 2
+    assert verify_log(tmp_path, WRITER.public_key, s.vault, policies=[s.policy])["problems"] == []
+    # a verifier holding the policy document (not the Policy object) gets the same answer
+    assert verify_log(tmp_path, WRITER.public_key, policies=[s.policy.to_dict()])["problems"] == []
+
+
+def test_a_policy_default_is_named_as_such(make_session, tmp_path):
+    doc = {"opn": "0.1", "type": "policy", "id": "all_handles", "rules": {}, "default": {"action": "handle", "tools": ["type"]}}
+    s, _ = with_log(make_session, tmp_path, profile=Policy.from_dict(doc))
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    assert records(tmp_path)[0]["authority"] == {"kind": "binding", "rule": "/default",
+                                                 "policy": digest(canonical(Policy.from_dict(doc).to_dict()))}
+    assert verify_log(tmp_path, WRITER.public_key, policies=[doc])["problems"] == []
+
+
+def test_the_standing_is_kept_with_the_entry_so_a_later_policy_cannot_rewrite_it(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    first = s.policy.digest
+    s.policy = s.policy.tighten(load_profile("strict"))  # the app switches policy after the handle was made
+    assert s.policy.digest != first
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    assert records(tmp_path)[0]["authority"]["policy"] == first
+
+
+def test_no_standing_where_no_rule_decided(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path, approve=lambda h, d, k: Approval(True, by="mia"))
+    with pytest.raises(HandleRefused):
+        s.resolve_args({"t": "{{OTP_9}}"}, ACME)
+    with pytest.raises(HandleRefused):
+        s.resolve_args({"t": "{{OTP_1}}", "x": "\ud800"}, ACME)
+    s.resolve_args({"t": "{{OTP_1}}"}, ACME)
+    auths = [r["authority"] for r in records(tmp_path)]
+    assert auths[0] == {"kind": "binding"} and auths[1] == {"kind": "binding"}  # unknown handle; malformed arguments
+    assert auths[2]["kind"] == "person" and "rule" not in auths[2] and "policy" not in auths[2]
+
+
+def test_a_vault_from_before_0_5_names_only_the_kind(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    for key in ("rule", "policy"):
+        del s.vault.entries[0].meta[key]
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    assert records(tmp_path)[0]["authority"] == {"kind": "binding"}
+    assert verify_log(tmp_path, WRITER.public_key, s.vault, policies=[s.policy])["problems"] == []
+
+
+def test_a_tampered_standing_in_the_vault_is_not_written(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    s.vault.entries[0].meta["rule"] = "OTP"  # not a pointer: the record falls back to the kind alone
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    assert records(tmp_path)[0]["authority"] == {"kind": "binding"}
+
+
+@pytest.mark.parametrize("authority", [
+    {"kind": "binding", "rule": "/rules/OTP"},
+    {"kind": "binding", "policy": digest(b"p")},
+    {"kind": "person", "by": "mia", "rule": "/rules/OTP", "policy": digest(b"p")},
+    {"kind": "consent", "ref": "c1", "digest": digest(b"t"), "rule": "/rules/OTP", "policy": digest(b"p")},
+    {"kind": "binding", "rule": "OTP", "policy": digest(b"p")},
+    {"kind": "binding", "rule": "/rules/otp", "policy": digest(b"p")},
+    {"kind": "binding", "rule": "/rules/OTP/uses", "policy": digest(b"p")},
+    {"kind": "binding", "rule": "/rules/OTP", "policy": "browse_and_fill"},
+])
+def test_the_writer_refuses_a_standing_out_of_shape(tmp_path, authority):
+    with pytest.raises(ValueError):
+        forge(tmp_path, authority=authority)
+
+
+@pytest.mark.parametrize("authority", [
+    {"kind": "binding", "rule": "/rules/OTP"},
+    {"kind": "person", "by": "mia", "rule": "/rules/OTP", "policy": digest(b"p")},
+    {"kind": "binding", "rule": "/rules", "policy": digest(b"p")},
+])
+def test_verify_log_flags_a_standing_out_of_shape(tmp_path, authority):
+    from open_pseudonym.egress import release_body
+
+    body = release_body(dict(session="s1", now=NOW, handle="{{OTP_1}}", data="OTP", source=None,
+                             sink={"tool": "type", "site": None}, call=digest(b"x"), decision="allow",
+                             authority={"kind": "binding"}), 1, None)
+    body["authority"] = authority
+    (tmp_path / "receipts.jsonl").write_text(WRITER.sign(body, "opn-release+jws") + "\n")
+    assert verify_log(tmp_path, WRITER.public_key)["problems"] == [
+        "release 1: authority.rule or authority.policy is not valid"]
+
+
+@pytest.mark.parametrize("rule,data,problem", [
+    ("/rules/OTP", "OTP", None),
+    ("/rules/CARD", "OTP", "rule"),       # the rule of another type
+    ("/default", "OTP", "rule"),          # OTP has its own rule, so the default did not decide
+    ("/default", "PERSON", "rule"),       # the default is tag, not handle
+    ("/rules/EMAIL", "EMAIL", "rule"),    # EMAIL is fake, not handle
+    ("/rules/NOPE", "NOPE", "rule"),      # no such rule
+])
+def test_verify_log_checks_the_rule_against_the_policy(tmp_path, rule, data, problem):
+    baf = load_profile("browse_and_fill")
+    forge(tmp_path, data=data, authority={"kind": "binding", "rule": rule, "policy": baf.digest})
+    got = verify_log(tmp_path, WRITER.public_key, policies=[load_profile("strict"), baf])["problems"]
+    assert got == ([] if problem is None else [
+        "release 1: authority.rule is not the handle rule for the record's data type in that policy"])
+    assert verify_log(tmp_path, WRITER.public_key)["problems"] == []  # without the policy there is nothing to check
+
+
+def test_verify_log_flags_a_policy_digest_that_matches_no_policy_given(tmp_path):
+    forge(tmp_path, authority={"kind": "binding", "rule": "/rules/OTP", "policy": load_profile("browse_and_fill").digest})
+    assert verify_log(tmp_path, WRITER.public_key, policies=[load_profile("strict")])["problems"] == [
+        "release 1: authority.policy is not the digest of any policy given"]
+
+
+def test_an_audit_id_goes_into_every_record_of_its_call(make_session, tmp_path):
+    log = EgressLog(tmp_path, WRITER, store_payloads=False)
+    s = make_session("browse_and_fill", release_log=log)
+    s.mask(OTP_MAIL + " Password: hunter2-xyz", Source(site="https://acme.com"))
+    handles = sorted(e.stand_in for e in s.vault.entries if e.action == "handle")
+    with pytest.raises(HandleRefused):
+        s.resolve_args({"a": handles[0]}, Sink("type", "https://evil.example"), audit_id="evt-1")
+    s.resolve_args({"a": handles[0], "b": handles[1]}, ACME, audit_id="evt_01JD8Z.r-7")
+    s.resolve_args({"a": handles[1]}, ACME)
+    assert [r.get("audit_id") for r in records(tmp_path)] == ["evt-1", "evt_01JD8Z.r-7", "evt_01JD8Z.r-7", None]
+    assert verify_log(tmp_path, WRITER.public_key, s.vault)["problems"] == []
+
+
+def test_an_audit_id_passes_through_json_text_arguments(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    assert s.resolve_args('{"text": "{{OTP_1}}"}', ACME, audit_id="evt-2").args == '{"text":"482913"}'
+    assert records(tmp_path)[0]["audit_id"] == "evt-2"
+
+
+@pytest.mark.parametrize("bad", ["", "e" * 129, "evt 1", "evt/1", "evt:1", "évt", "evt\n", 7, b"evt", ["evt"]])
+def test_a_malformed_audit_id_is_refused_before_anything(make_session, tmp_path, bad):
+    s, log = with_log(make_session, tmp_path)
+    with pytest.raises((TypeError, ValueError)):
+        s.resolve_args({"text": "{{OTP_1}}"}, ACME, audit_id=bad)
+    assert log.seq == 0 and s.vault.entries[0].meta["uses_left"] == 1  # nothing written, no use counted
+    assert s.resolve_args({"text": "{{OTP_1}}"}, ACME, audit_id="E" * 128).args == {"text": "482913"}
+    assert records(tmp_path)[0]["audit_id"] == "E" * 128
+
+
+def test_an_audit_id_is_never_looked_up_but_a_value_in_it_is_still_caught(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    # the writer treats the id as opaque: it does not refuse one that happens to hold a real value...
+    s.resolve_args({"text": "{{OTP_1}}"}, ACME, audit_id="otp-482913")
+    # ...but the verifier's "no value in any record" check reads every field, the audit id included
+    report = verify_log(tmp_path, WRITER.public_key, s.vault)
+    assert report["problems"] == ["release 1: 1 known value(s) found in the record"] and report["leaks"] == 1
+
+
+@pytest.mark.parametrize("value", ["", "a b", "x" * 129, 5])
+def test_verify_log_and_the_writer_refuse_an_audit_id_out_of_shape(tmp_path, value):
+    with pytest.raises(ValueError):
+        forge(tmp_path / "w", audit_id=value)
+    from open_pseudonym.egress import release_body
+
+    body = release_body(dict(session="s1", now=NOW, handle="{{OTP_1}}", data="OTP", source=None,
+                             sink={"tool": "type", "site": None}, call=digest(b"x"), decision="allow",
+                             authority={"kind": "binding"}), 1, None)
+    body["audit_id"] = value
+    (tmp_path / "receipts.jsonl").write_text(WRITER.sign(body, "opn-release+jws") + "\n")
+    assert verify_log(tmp_path, WRITER.public_key)["problems"] == ["release 1: audit_id is not valid"]

@@ -440,6 +440,17 @@ def release_vectors():
     def call(args):
         return digest(canonical(args))  # the arguments with the handle still in them
 
+    # The standing (spec 10.4): the rule that set the binding, as a pointer into the policy document, and the digest of
+    # the canonical policy document, taken here from the raw profile file rather than from the SDK's Policy class
+    baf = digest(canonical(json.loads((ROOT / "data/profiles/browse_and_fill.json").read_text())))
+    assert baf == load_profile("browse_and_fill").digest
+    otp_rule = {"rule": "/rules/OTP", "policy": baf}
+    card_rule = {"rule": "/rules/CARD", "policy": baf}
+    by_default = {"opn": "0.1", "type": "policy", "id": "handles_by_default",
+                  "description": "Every value is a handle that only the type tool fills.", "rules": {},
+                  "default": {"action": "handle", "tools": ["type"]}, "allow": []}
+    default_rule = {"rule": "/default", "policy": digest(canonical(by_default))}
+
     def rec(seq, prev_idx, **kw):
         base = {"opn": "0.1", "type": "release", "session": "s1", "seq": seq, "prev": prev_idx, "iat": NOW}
         base.update(kw)
@@ -492,17 +503,33 @@ def release_vectors():
         case("numbers in the arguments are written the way JavaScript writes them", "browse_and_fill", mail, acme, None, [
             {"args_json": '{"n": 12345678901234567890, "f": 1.5, "big": 1e21, "text": "{{OTP_1}}"}', "sink": type_acme},
         ]),
+        case("a Sensitive References audit id joins the records of its call; a malformed one fills and writes nothing",
+             "browse_and_fill", mail, acme, None, [
+            {"args": a1, "sink": {"tool": "type", "site": "https://evil.example"}, "audit_id": "evt_01JD8Z.r-7"},
+            {"args": a1, "sink": type_acme, "audit_id": ""},
+            {"args": a1, "sink": type_acme, "audit_id": "evt 01JD8Z/r-8"},
+            {"args": a1, "sink": type_acme, "audit_id": "e" * 129},
+            {"args": a1, "sink": type_acme, "audit_id": "E" * 128},
+        ]),
+        dict(case("a policy's default rule decided, and the record names it", None, mail, acme, None, [
+            {"args": {"t": "{{OTP_1}}"}, "sink": {"tool": "click", "site": "https://acme.com/login"}},
+            {"args": {"t": "{{OTP_1}}"}, "sink": type_acme},
+        ]), policy=by_default),
     ]
+    for c in cases:
+        if c["profile"] is None:
+            del c["profile"]
     shown = digest(canonical({"nonce": nonce, "description": "a Visa card ending 4242", "handle": "{{CARD_1}}",
                               "site": "shop.example", "tool": "type"}))
     wrong_site = lambda seq, prev, **kw: rec(seq, prev, handle="{{OTP_1}}", data="OTP", source="acme.com",  # noqa: E731
                                               sink={"tool": "type", "site": "evil.example"}, call=call(a1),
                                               outcome="refused", decision="deny", code="wrong_site",
-                                              reason="bound to a different site", authority={"kind": "binding"},
-                                              uses_left=1)
-    allow_otp = lambda seq, prev: rec(seq, prev, handle="{{OTP_1}}", data="OTP", source="acme.com",  # noqa: E731
-                                      sink={"tool": "type", "site": "acme.com"}, call=call(a1), outcome="released",
-                                      decision="allow", authority={"kind": "binding"}, uses_left=0)
+                                              reason="bound to a different site",
+                                              authority={"kind": "binding", **otp_rule}, uses_left=1, **kw)
+    allow_otp = lambda seq, prev, **kw: rec(seq, prev, handle="{{OTP_1}}", data="OTP", source="acme.com",  # noqa: E731
+                                            sink={"tool": "type", "site": "acme.com"}, call=call(a1),
+                                            outcome="released", decision="allow",
+                                            authority={"kind": "binding", **otp_rule}, uses_left=0, **kw)
     card_sink = {"tool": "type", "site": "shop.example"}
     card_args = {"card": "{{CARD_1}}"}
     expect = [
@@ -511,7 +538,7 @@ def release_vectors():
          [wrong_site(1, None), allow_otp(2, "$1"),
           rec(3, "$2", handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
               call=call(a1), outcome="refused", decision="deny", code="used_up", reason="already used",
-              authority={"kind": "binding"}, uses_left=0)]),
+              authority={"kind": "binding", **otp_rule}, uses_left=0)]),
         ([{"refused": "unknown handle", "code": "unknown_handle"}],
          [rec(1, None, handle="{{OTP_9}}", data=None, source=None, sink={"tool": "type", "site": "acme.com"},
               call=call({"t": "{{OTP_9}}"}), outcome="refused", decision="deny", code="unknown_handle",
@@ -531,15 +558,15 @@ def release_vectors():
         ([{"refused": "needs the person's approval", "code": "needs_approval"}],
          [rec(1, None, handle="{{CARD_1}}", data="CARD", source="shop.example", sink=card_sink, call=call(card_args),
               outcome="refused", decision="deny", code="needs_approval", reason="needs the person's approval",
-              authority={"kind": "policy"})]),
+              authority={"kind": "policy", **card_rule})]),
         ([{"refused": "expired", "code": "expired"}],
          [rec(1, None, handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
               call=call(a1), outcome="refused", decision="deny", code="expired", reason="expired",
-              authority={"kind": "binding"}, uses_left=1, iat=NOW + 600)]),
+              authority={"kind": "binding", **otp_rule}, uses_left=1, iat=NOW + 600)]),
         ([{"refused": "not bound to a site or tool", "code": "unbound"}],
          [rec(1, None, handle="{{OTP_1}}", data="OTP", source=None, sink={"tool": "type", "site": "acme.com"},
               call=call(a1), outcome="refused", decision="deny", code="unbound", reason="not bound to a site or tool",
-              authority={"kind": "binding"}, uses_left=1)]),
+              authority={"kind": "binding", **otp_rule}, uses_left=1)]),
         ([{"refused": "release not recorded", "code": "not_recorded"}, {"args": {"selector": "#otp", "text": "482913"}}],
          [allow_otp(1, None)]),
     ]
@@ -554,7 +581,18 @@ def release_vectors():
           allow_otp(2, "$1")]),
         ([{"args": big}],
          [rec(1, None, handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
-              call=call_big, outcome="released", decision="allow", authority={"kind": "binding"}, uses_left=0)]),
+              call=call_big, outcome="released", decision="allow", authority={"kind": "binding", **otp_rule},
+              uses_left=0)]),
+        ([{"refused": "bound to a different site", "code": "wrong_site"}, {"invalid": "audit_id"},
+          {"invalid": "audit_id"}, {"invalid": "audit_id"}, {"args": {"selector": "#otp", "text": "482913"}}],
+         [wrong_site(1, None, audit_id="evt_01JD8Z.r-7"), allow_otp(2, "$1", audit_id="E" * 128)]),
+        ([{"refused": "not allowed for this tool", "code": "wrong_tool"}, {"args": {"t": "482913"}}],
+         [rec(1, None, handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "click", "site": "acme.com"},
+              call=call({"t": "{{OTP_1}}"}), outcome="refused", decision="deny", code="wrong_tool",
+              reason="not allowed for this tool", authority={"kind": "binding", **default_rule}),
+          rec(2, "$1", handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
+              call=call({"t": "{{OTP_1}}"}), outcome="released", decision="allow",
+              authority={"kind": "binding", **default_rule})]),
     ]
     assert len(expect) == len(cases)
     for c, (results, records) in zip(cases, expect):
@@ -575,6 +613,12 @@ def release_vectors():
         c["results"], c["records"], c["tokens"] = results, fixed, got["tokens"]
     assert cases[0]["records"][1]["uses_left"] == 0 and cases[0]["records"][0]["uses_left"] == 1
     assert all(r["authority"] for c in cases for r in c["records"])
+    # the standing is there exactly when a rule decided: never for an unknown handle, arguments with no canonical form,
+    # or a person's answer
+    for c in cases:
+        for r in c["records"]:
+            ruled = r["authority"]["kind"] in ("binding", "policy") and r.get("code") not in ("unknown_handle", "malformed")
+            assert ("rule" in r["authority"]) == ruled == ("policy" in r["authority"]), (c["name"], r)
 
     entry = dict(session="s1", now=NOW, handle="{{OTP_1}}", data="OTP", source="acme.com",
                  sink={"tool": "type", "site": "acme.com"}, call=digest(b"x"), decision="allow",
@@ -610,6 +654,51 @@ def release_vectors():
          "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
          "problems": ["release 1: shown names a handle the vault does not hold"]},
         {"name": "a real value hidden in a record", "entry": entry, "set": {"authority": {"kind": "person", "by": "code 482913"}},
+         "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
+         "problems": ["release 1: 1 known value(s) found in the record"]},
+        {"name": "a binding with its standing, checked against its policy",
+         "entry": dict(entry, authority={"kind": "binding", **otp_rule}), "policies": ["browse_and_fill"], "problems": []},
+        {"name": "a policy decision with its standing, checked against its policy",
+         "entry": dict(deny, data="CARD", handle="{{CARD_1}}", code="needs_approval",
+                       reason="needs the person's approval", authority={"kind": "policy", **card_rule}),
+         "policies": ["strict", "browse_and_fill"], "problems": []},
+        {"name": "a default rule, checked against its policy",
+         "entry": dict(entry, authority={"kind": "binding", **default_rule}), "policies": [by_default], "problems": []},
+        {"name": "a standing whose policy was not given", "entry": dict(entry, authority={"kind": "binding", **otp_rule}),
+         "policies": ["strict"], "problems": ["release 1: authority.policy is not the digest of any policy given"]},
+        {"name": "a standing that names the rule of another type",
+         "entry": dict(entry, authority={"kind": "binding", **card_rule}), "policies": ["browse_and_fill"],
+         "problems": ["release 1: authority.rule is not the handle rule for the record's data type in that policy"]},
+        {"name": "a standing that names the default where the type has its own rule",
+         "entry": dict(entry, authority={"kind": "binding", "rule": "/default", "policy": baf}),
+         "policies": ["browse_and_fill"],
+         "problems": ["release 1: authority.rule is not the handle rule for the record's data type in that policy"]},
+        {"name": "a standing that names a rule that is not a handle",
+         "entry": dict(entry, data="EMAIL", authority={"kind": "binding", "rule": "/rules/EMAIL", "policy": baf}),
+         "policies": ["browse_and_fill"],
+         "problems": ["release 1: authority.rule is not the handle rule for the record's data type in that policy"]},
+        {"name": "a standing is not checked when no policy is given",
+         "entry": dict(entry, authority={"kind": "binding", **card_rule}), "problems": []},
+        {"name": "a rule without its policy", "entry": entry, "set": {"authority": {"kind": "binding", "rule": "/rules/OTP"}},
+         "problems": bad("authority.rule or authority.policy")},
+        {"name": "a policy without its rule", "entry": entry, "set": {"authority": {"kind": "binding", "policy": baf}},
+         "problems": bad("authority.rule or authority.policy")},
+        {"name": "a standing on a person's answer", "entry": entry,
+         "set": {"authority": {"kind": "person", "by": "mia", **otp_rule}}, "problems": bad("authority.rule or authority.policy")},
+        {"name": "a rule that is not a pointer into the policy", "entry": entry,
+         "set": {"authority": {"kind": "binding", "rule": "OTP", "policy": baf}},
+         "problems": bad("authority.rule or authority.policy")},
+        {"name": "a policy that is not a digest", "entry": entry,
+         "set": {"authority": {"kind": "binding", "rule": "/rules/OTP", "policy": "browse_and_fill"}},
+         "problems": bad("authority.rule or authority.policy")},
+        {"name": "an audit id", "entry": entry, "set": {"audit_id": "evt_01JD8Z.r-7"}, "problems": []},
+        {"name": "an empty audit id", "entry": entry, "set": {"audit_id": ""}, "problems": bad("audit_id")},
+        {"name": "an audit id of 129 characters", "entry": entry, "set": {"audit_id": "e" * 129},
+         "problems": bad("audit_id")},
+        {"name": "an audit id with a space and a slash", "entry": entry, "set": {"audit_id": "evt 01/2"},
+         "problems": bad("audit_id")},
+        {"name": "an audit id that is not a string", "entry": entry, "set": {"audit_id": 7}, "problems": bad("audit_id")},
+        {"name": "a real value hidden in an audit id", "entry": entry, "set": {"audit_id": "otp-482913"},
          "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
          "problems": ["release 1: 1 known value(s) found in the record"]},
     ]

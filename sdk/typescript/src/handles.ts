@@ -54,6 +54,27 @@ export interface Approval {
 }
 
 export const DIGEST = /^sha-256:[A-Za-z0-9_-]{43}$/u;
+/**
+ * The rule of a policy that set a handle's binding, as a JSON Pointer (RFC 6901) into the policy document: the rule for
+ * the type, or the policy's default. With the policy's digest it is the standing a release was decided under (10.4).
+ */
+export const RULE_REF = /^\/(?:default|rules\/[A-Z][A-Z0-9_]{1,31})$/u;
+/**
+ * The id of an audit event that a Sensitive References server wrote before it released values (10.5): opaque, 1 to 128
+ * characters of A-Z a-z 0-9 . _ - (the draft's RESOLVER-PROFILE 12.4). Never a value, a reference or a hash of either.
+ */
+export const AUDIT_ID = /^[A-Za-z0-9._-]{1,128}$/u;
+
+/**
+ * Return `auditId` when it has the strict shape of 10.5, null when there is none. Anything else is a bug in the app and
+ * throws before anything is decided, filled or written.
+ */
+export function checkAuditId(auditId: unknown): string | null {
+  if (auditId == null) return null;
+  if (typeof auditId !== "string") throw new TypeError("auditId is a string");
+  if (!AUDIT_ID.test(auditId)) throw new RangeError("auditId is 1 to 128 characters of A-Z a-z 0-9 . _ -");
+  return auditId;
+}
 
 /**
  * Turn what an approval callback returned (a boolean or an Approval) into an Approval. Anything else is a bug in the

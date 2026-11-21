@@ -14,7 +14,7 @@ import { FF1 } from "./fpe.ts";
 import { HandleRefused, Sink, Source, type Approval } from "./handles.ts";
 import { canonical, digest } from "./jcs.ts";
 import { Signer, verify } from "./jws.ts";
-import { PolicyError, loadProfile } from "./policy.ts";
+import { Policy, PolicyError, loadProfile } from "./policy.ts";
 import { Session } from "./session.ts";
 import { Vault } from "./vault.ts";
 
@@ -194,7 +194,8 @@ function runReleaseCase(c: any, dir: string) {
   const spec = c.approve;
   const approve = spec === null ? undefined : () => (typeof spec === "boolean" ? spec : (spec as Approval));
   const writer = signer("writer");
-  const s = new Session(c.profile, {
+  const policy = policyOf(c.policy ?? c.profile);
+  const s = new Session(policy, {
     vault: new Vault(hex(c.seed), c.now), clock: () => now, approve, sessionId: "s1",
     releaseLog: new EgressLog(dir, writer, false),
   });
@@ -212,15 +213,22 @@ function runReleaseCase(c: any, dir: string) {
     }
     try {
       const args = st.args_json !== undefined ? JSON.parse(st.args_json) : st.args;
-      results.push({ args: s.resolveArgs(args, new Sink(st.sink)).args });
+      results.push({ args: s.resolveArgs(args, new Sink(st.sink), { auditId: st.audit_id }).args });
     } catch (exc) {
-      if (!(exc instanceof HandleRefused)) throw exc;
-      results.push({ refused: exc.reason, code: exc.code });
+      if (exc instanceof HandleRefused) results.push({ refused: exc.reason, code: exc.code });
+      else if ((exc instanceof TypeError || exc instanceof RangeError) && st.audit_id !== undefined) {
+        results.push({ invalid: "audit_id" }); // an app bug: thrown before anything was decided or written
+      } else throw exc;
     }
   }
   const tokens = readLines(dir);
   const records = tokens.map((t) => verify(t, writer.publicKey, "opn-release+jws"));
-  return { results, records, tokens, problems: verifyLog(dir, writer.publicKey, s.vault).problems };
+  return { results, records, tokens, problems: verifyLog(dir, writer.publicKey, s.vault, { policies: [policy] }).problems };
+}
+
+/** A vector names a starter profile, or gives a policy document inline. */
+function policyOf(spec: any): Policy {
+  return typeof spec === "string" ? loadProfile(spec) : Policy.fromDict(spec);
 }
 
 /** Signs a release record changed the way `c` says and returns what verifyLog reports about it. */
@@ -236,7 +244,7 @@ function runShapeCase(c: any, dir: string): string[] {
     s.mask(c.mask);
     vault = s.vault;
   }
-  return verifyLog(dir, writer.publicKey, vault).problems;
+  return verifyLog(dir, writer.publicKey, vault, { policies: (c.policies ?? []).map(policyOf) }).problems;
 }
 
 /** Writes the log in `doc`, cuts it to `keep` records, signs the case's checkpoints and verifies the log. */
