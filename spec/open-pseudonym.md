@@ -1,7 +1,9 @@
-# Open Pseudonym v0.2
+# Open Pseudonym v0.3
 
-Status: draft 0.2, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"` (unchanged: policies,
-vault files and receipts written under 0.1 still read the same).
+Status: draft 0.3, November 2026. Licence: CC BY 4.0. Wire version string: `"opn": "0.1"` (unchanged: policies,
+vault files and receipts written under 0.1 still read the same). Version 0.3 adds two signed record types, the
+release record (10.4) and the checkpoint (11.3), and a boundary for Sensitive References (10.5). Nothing that 0.2
+wrote changes meaning; a 0.2 verifier reading a log that holds release records reports them as damaged lines.
 
 Open Pseudonym is a way to keep personal data away from an AI model while the model still does the task well. Before
 text reaches the model, personal values are replaced with stand-ins chosen for the task at hand. When the model
@@ -27,6 +29,8 @@ What it does promise, and what the receipts let anyone check:
 2. The vault, the only link back to real values, does not leave the pseudonymisation domain (section 2).
 3. No value the vault knows about is present in a request that carries a valid receipt (section 11).
 4. A handle is filled in only into a place its binding allows (section 10).
+5. Every decision to fill a handle, or to refuse, can be signed with who allowed it, before the value is filled in
+   (section 10.4).
 
 ## 2. Terms
 
@@ -430,7 +434,11 @@ A span whose rule is `handle` becomes `{{TYPE_n}}` with binding data:
    approval callback, ask the app; no callback with `ask` set is a refusal (`needs the person's approval`), a "no" is
    `not approved`.
 3. Only if every handle passed: restore all strings, filling handles with real values. Then count one use per handle
-   and remember the sink.
+   and remember the sink. If the app set a release log, the records of 10.4 are written before this step, and a
+   failed write stops it.
+
+Every refusal has a short code that never changes, even if the text is reworded (the table is in 10.4). A refusal
+with its code is what the app, and the release record, can rely on.
 
 Strings that were not changed but contain an email, phone, card, IBAN, account number or URL are reported with origin
 `model`: the model wrote that value itself, which an app may want to show the person before acting.
@@ -455,6 +463,135 @@ social security number`; API_KEY `an API key`; anything else `a <type in lower c
 These descriptions tell the model a card's brand and last four digits and an IBAN's country and last four
 characters, which is what people expect to see and lets the model pick the right card. An app that wants to hide
 even that can use `drop` or `fpe` instead of `handle` for those types.
+
+### 10.4 Release records
+
+A handle is filled in only where its binding allows, but a binding says where a secret may go, not who decided that it
+should. Someone who reads an inbox for agents put the missing question like this: filling only if the target matches
+where the secret came from is an authorization decision about a destination, so it raises "who allowed this
+destination, and through which channel", and a record of what decided it would let a client show afterwards why a
+secret left, not only that it did
+([yaotsakpo, MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-6759178333)).
+A release record is that record.
+
+A release record is a compact JWS signed like a receipt (11.2) with `typ` `opn-release+jws`. It goes in the **same
+log and the same chain** as egress receipts: one `receipts.jsonl`, one `seq` counting every line, `prev` the digest of
+the line before, whatever its type. Payload (canonical JSON, integers only; schema `schemas/release-record.schema.json`):
+
+```json
+{"opn": "0.1", "type": "release", "session": "...", "seq": 2, "prev": "sha-256:...", "iat": 1793836800,
+ "handle": "{{OTP_1}}", "data": "OTP", "source": "acme.com",
+ "sink": {"tool": "type", "site": "acme.com"}, "call": "sha-256:...",
+ "outcome": "released", "decision": "allow", "authority": {"kind": "binding"}, "uses_left": 0}
+```
+
+| Field | Meaning |
+|---|---|
+| `handle` | The handle written in the arguments, as the model wrote it. |
+| `data` | The type of the value (`OTP`, `CARD`), or `null` when the handle is unknown. |
+| `source` | The host the value was read from (10.1), or `null`. |
+| `sink` | `tool` and `site`: where it was about to go. `site` is the host only, never a full address (an address can carry secrets in its query). Either may be `null`. |
+| `call` | The digest of the canonical JSON (RFC 8785) of the tool call's arguments **with handles not filled in**. |
+| `outcome`, `decision` | `released` with `allow`, or `refused` with `deny`. |
+| `code`, `reason` | Present on `deny` only: a stable code from the table below, and the refusal text of 10.2. |
+| `authority` | Who allowed it, below. |
+| `uses_left` | The uses the handle has left after this decision, when it counts uses. |
+
+**No value, no hash of a value.** A record never holds the real value, or a digest, a prefix, a mask or any other
+function of it: a six-digit code is easy to guess from its hash. `call` is safe because the arguments still hold the
+handle, not the value. A conforming writer has no field in which a value could go, and a verifier given the vault
+checks that no known value appears in any record.
+
+**Audit before release.** When a log is set, the records for a call are signed and written, in one write, before any
+value is filled in. If the write fails, nothing is filled in, no use is counted, and the call is refused with the
+code `not_recorded` (text `release not recorded`). A record is never written for this code, since there is no
+record. A refusal is recorded too, with `decision: "deny"` and its code; if that record cannot be written the
+refusal still stands, since nothing was filled either way.
+
+**Authority.** `authority` has the shape of the authority in OAC 8.1: `kind`, and as they apply `ref`, `digest`,
+`by`, `channel`, `shown`. All values are non-empty strings.
+
+| `kind` | Meaning | Fields |
+|---|---|---|
+| `binding` | The handle's binding allowed it (or refused it), and nobody was asked. | none |
+| `person` | The app asked a person, through the approval callback. | `shown`; `by` (who), `channel` (where they answered) and `ref` when the app says |
+| `consent` | A person approved through an OAC Consent. | `ref` (the consent's id) and `digest` (the digest of its token), plus `shown`, `by`, `channel` |
+| `policy` | A policy rule decided, and no person was involved: a rule that says `ask` with nobody to ask. | none |
+
+`shown` is the digest of the canonical JSON `{"handle", "description", "tool", "site"}` that the approver was given:
+the handle, the description the model was told (10.3), the tool, and the site as a host (`null` when there is none). A
+client can recompute it, and a verifier can see that what was approved was this handle going to this place.
+
+The approval callback of 10.2 may answer with a plain yes or no, which gives `kind` `person` and `shown` only, or
+with an approval that also carries `by`, `channel`, `ref` and `digest`. An app that uses OAC passes the consent's id
+as `ref` and the digest of its token as `digest`, and the record then names the consent that allowed the release. An
+answer of any other shape is a bug in the app and fills nothing.
+
+**Codes.** The code names the first check that failed, in the order of 10.2:
+
+| Code | Text | When |
+|---|---|---|
+| `unknown_handle` | `unknown handle` | The vault never issued this handle. |
+| `unbound` | `not bound to a site or tool` | It has neither `sites` nor `tools`. |
+| `expired` | `expired` | Its time is up. |
+| `used_up` | `already used` | It has no uses left. |
+| `wrong_tool` | `not allowed for this tool` | The tool is not in `tools`. |
+| `wrong_site` | `bound to a different site` | The site is not in `sites`. |
+| `needs_approval` | `needs the person's approval` | A rule says `ask` and the app has no approval callback. |
+| `not_approved` | `not approved` | The approver said no. |
+| `not_recorded` | `release not recorded` | The release could not be written to the log. |
+
+Authority of a refusal: the first six are `binding`, `needs_approval` is `policy`, `not_approved` is `person` or
+`consent` with what the approver gave.
+
+**What a record proves.** A release record proves a decision and its authority: that this handle was allowed, or
+refused, for this tool and site, by this binding or this person, and that the record was written first. It does
+not prove that the value reached only that sink. The tool, the browser or the site can pass a value on, and nothing
+here sees what happens after the fill (section 14).
+
+### 10.5 Sensitive References
+
+Handles cover values **the client holds**: the app read a code, kept it in the vault and fills it later. A different
+design covers values **the server keeps**: the server never sends the value, only an opaque reference the model can
+carry, and the value is released later, outside the model, with its own consent and audit. That design is
+Sensitive References, a pre-SEP draft by Sprinterli
+([Concept 0.7, not a SEP](https://github.com/Sprinterli/mcp-sensitive-references)), raised for this discussion in
+[a comment on MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-6875843267).
+A host can use both. This section is the boundary between them, and nothing more: **we claim no interoperability with
+that draft**, and we do not resolve, check or issue references.
+
+A sensitive reference has two written forms: `sref:<kind>:<id>` and `⟦sref:<kind>:<id>⟧`, where `kind` is 1 to 32
+and `id` is 20 to 128 characters of ASCII letters, digits, `_` and `-` (the grammar of the draft's wire
+representation, Concept 0.7). The bare form must not follow a letter, digit, `_` or `-`, and must not be followed by
+one. A conforming implementation leaves a reference exactly as written:
+
+1. It is **never masked**: no detector acts inside it, even on digits that look like a card or a phone number, and
+   known values do not match inside it.
+2. It is **never a stand-in**, and a stand-in is never made for it.
+3. It is **never restored or filled**: restoring leaves it alone even if a stand-in or a digit run of this session sits
+   inside it, a stream never cuts one in half, and `{{...}}` handles never resolve to one.
+4. It is **never an egress leak**, and it is never reported as a value the model wrote (10.2).
+
+Text that only looks like a reference (`sref:email:short`, a letter in front, a kind longer than 32) is ordinary text.
+A reference is not a secret and holds no value, so none of this hides anything: it keeps references whole, so that
+the host that issued them can still read them.
+
+A release record and the audit event of a reference resolve are the same kind of decision record, so a host that
+uses both may want them to line up. This table is a suggestion for the draft's open question about the minimum audit
+event (OQ-18, "Audit, rate limits and recovery"), not a mapping either project has agreed:
+
+| Resolve audit event (draft, RESOLVER-PROFILE section 15) | Release record |
+|---|---|
+| names the subject | `authority.by`, when a person approved |
+| names the client | `session` |
+| names the sink profile (`local_file`, `process`, `display`) | `sink.tool` |
+| destination, for audit only | `sink.site`, a host, never an address |
+| number of values released | one record per handle; records of one call share `call` |
+| written before the value leaves; `503 audit_unavailable` if not | audit before release; `not_recorded` |
+| holds no value and no reference in canonical form | holds no value and no hash of one; a reference stays opaque (above) |
+| recorded for each release | recorded for each release **and each refusal**, with a stable `code` |
+| no field for who allowed it, or what they were shown | `authority` (`kind`, `by`, `channel`, `ref`, `digest`) and `shown` |
+| no field for what was asked for | `call`, the digest of the arguments with handles unfilled |
 
 ## 11. Egress check and receipts
 
@@ -499,14 +636,59 @@ the digest of the previous receipt's token (ASCII bytes) in the same log, or `nu
 distinct vault entries whose stand-ins appear in the payload. `check.known_values` is the number of non-`keep`
 entries at the time; `check.found` must be 0 for a request that was sent.
 
-A log is a folder holding `receipts.jsonl` (one token per line) and, optionally, `payloads/NNNNNN.bin` (the exact
-bytes; these hold stand-ins, not real values). Verifying a log checks each signature, that `seq` counts 1, 2, 3...,
-the `prev` chain, `found` is 0, each stored payload's digest (when a `payloads` folder exists, a missing payload is a
+A log is a folder holding `receipts.jsonl` (one token per line, each an egress receipt or a release record, 10.4) and,
+optionally, `payloads/NNNNNN.bin` (the exact bytes of an egress receipt; these hold stand-ins, not real values; a
+release record has none). Verifying a log checks each signature (a line's `typ` says which of the two it is, and any
+other `typ` is damage), that `seq` counts 1, 2, 3..., the `prev` chain, for an egress receipt that `found` is 0, for
+a release record that its fields are the ones 10.4 lists and, given the vault, that no known value appears in it,
+each stored payload's digest (when a `payloads` folder exists, a missing payload is a
 problem, and so is a stored payload with no receipt), and, given the vault, the check again on each payload. A damaged
 line or a missing `receipts.jsonl` is reported, never fatal, and so are an empty log and, when a vault is given, a
-log with no payload left to re-check. Given the session id, every receipt must name it. A chain
-cannot show that receipts were cut off the end; a verifier that kept the number of requests sent or the digest of the
-last receipt (the proxy returns each receipt in a header) compares them to detect it.
+log with no payload left to re-check. Given the session id, every record must name it.
+
+**A chain proves order, not completeness.** It cannot show that records were cut off the end, because a shorter log
+is still a valid chain. A verifier MUST NOT call a log complete because its chain holds. Completeness is proven only
+up to a point that someone other than the writer vouches for:
+
+- a **checkpoint** (11.3), signed by a key the writer does not hold, which names the head of the log at one moment; or
+- a **count or a last digest the verifier kept itself**: the number of requests sent (`expect_count`) or the digest of
+  the last record (`expect_last`; the proxy returns each receipt in a header). The verifier compares them and reports a
+  log that was cut or added to.
+
+Without either, a log that verifies is only a **prefix**: valid as far as it goes, with the end unproven. "Valid" and
+"complete" are two results and are never merged into one.
+
+### 11.3 Checkpoints
+
+A checkpoint says: at this moment the log named by `session` had `seq` records, and the digest of the last was `head`.
+It is a compact JWS with `typ` `opn-checkpoint+jws`, signed with Ed25519 like a receipt, by **a key that is not the log
+writer's** (a second device, a witness, a service the person trusts). Payload (schema `schemas/checkpoint.schema.json`):
+
+```json
+{"opn": "0.1", "type": "checkpoint", "session": "...", "seq": 6, "head": "sha-256:...", "iat": 1793836800}
+```
+
+`head` is the digest of record `seq`'s token (ASCII bytes), the same value record `seq + 1` carries as `prev`. The
+key holder makes a checkpoint after it has checked the log, and keeps it away from the writer; the writer cannot
+remove or reorder what a checkpoint covers without the head failing to match.
+
+A verifier given checkpoints and the public key that made them (`anchors`, `anchor_key`) MUST:
+
+1. Refuse every checkpoint if the key is the log writer's own key (a checkpoint the writer could sign vouches for
+   nothing). Problem: `the anchor key is the key that signs the log: ...`.
+2. Check each checkpoint's signature and `typ`, its fields, and that it names the log's session.
+3. If `seq` is greater than the number of records, report a problem: `anchor at seq N: the log was cut off after seq
+   M`. The log is shorter than it was.
+4. If `seq` is within the log and `head` is not the digest of record `seq`, report a problem: `anchor at seq N: head
+   does not match receipt N`. The log was changed or replaced.
+5. Report `proven_to`: the highest `seq` of a checkpoint that passed, or null.
+6. Report `status`: `complete` if `proven_to` equals the number of records, otherwise `prefix`; and `reason`: `null`
+   when complete, `no_anchor` when no checkpoint passed, `unanchored_tail` when records come after the last one that
+   passed.
+
+Records after the latest checkpoint are not protected against being cut off. `complete` says nothing about whether
+the records are valid: read the problems too. The signature and the chain are checked whether or not checkpoints are
+given, and `expect_count` and `expect_last` keep working next to them.
 
 ## 12. Bindings
 
@@ -538,7 +720,15 @@ server, with the sink `{"tool": <tool name>, "site": <the site configured for th
 per tool: a site for a whole server would let a handle bound to it be filled into any of its tools, including ones
 that send messages. A refused handle
 becomes a tool error whose text is the refusal reason. Handle notes are appended to the tool result as an extra text
-item.
+item. A gateway given a release log records each release and refusal (10.4).
+
+SEP-1913 (trust annotations, an experimental extension of the MCP tool-annotation work) lets a server mark what a
+result holds. Its pull request text and its extension repository do not yet agree on the name of the hint
+(`sensitiveHint` in one, `sensitive` in the other), so nothing here depends on either. A gateway MAY mark a result it
+masked with `sensitive: true`, and MAY add an `evidenceRef` that points at a receipt or a release record:
+`{"type": "opn.egress.v1" or "opn.release.v1", "digest": <the digest of the record's token, as `prev` uses it>,
+"canonicalization": "jcs/rfc8785"}`. This is a note on how the two could fit, not a claim that SEP-1913 adopts it or
+that any host reads it. References of 10.5 pass through a gateway untouched.
 
 ## 13. Wording
 
@@ -566,7 +756,13 @@ needs public commitments and contracts, so the output is "pseudonymized" in CCPA
   its own is flagged with origin `model`.
 - **The vault is the crown jewel.** Encrypt it, keep it inside the pseudonymisation domain, give it an expiry that
   matches the task, and never log it.
-- **Logs.** Never log real values. Receipts and stored payloads hold stand-ins only.
+- **Logs.** Never log real values. Receipts, release records and stored payloads hold stand-ins only.
+- **What a release record proves.** A decision and its authority: this handle, this tool and site, allowed or refused
+  by this binding or this person, written before the fill. It does not prove that the value reached only that sink: the
+  tool, the browser or the site can pass it on. A release record shown to a person also does not prove the person
+  understood what they approved; `shown` proves only what they were given.
+- **Completeness.** A log that verifies is a prefix until a checkpoint from another key, or a count the verifier kept,
+  says otherwise (11.2, 11.3). Records after the latest checkpoint can still be cut off.
 - **Caching.** Stand-ins are deterministic within a session, so repeated prefixes stay byte-identical and provider
   prompt caches keep working. System prompts without personal data can be left unmasked to keep cache hits.
 - **Images and audio** are out of scope for v0.2. Text inside images reaches the model as is.
@@ -577,7 +773,9 @@ needs public commitments and contracts, so the output is "pseudonymized" in CCPA
 |---|---|
 | L1 | Sections 3 to 9 with the shared patterns, the known-value detector, and the vault |
 | L2 | L1 plus at least one name detector beyond the patterns (an ML model or the app's own lists) |
-| L3 | L2 plus handles (section 10), streaming restore, and egress receipts (section 11) |
+| L3 | L2 plus handles (section 10), streaming restore, egress receipts (section 11), release records (10.4), checkpoints (11.3) and the Sensitive References boundary (10.5) |
 
-An implementation conforms at a level when it passes every vector in `vectors/` for the sections that level covers.
+An implementation conforms at a level when it passes every vector in `vectors/` for the sections that level covers
+(`releases.json` and `checkpoints.json` for 10.4 and 11.3, the scenario "sensitive references stay opaque" and the
+reference cases of `detect.json` for 10.5).
 Vectors fix seeds and clocks so outputs are exact.
