@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0 (2026-11-21)
+
+Release records say what standing a decision was made under, and can name a Sensitive References audit event. Spec
+v0.4. Both were promised on MCP SEP-1913. The wire label stays `"opn": "0.1"`; every record 0.4 wrote is still valid,
+and a record without the new fields reads as before. A 0.4 verifier reports a record that carries them as malformed.
+
+### Added
+
+- **The standing of a release** (spec 10.4), from
+  [yaotsakpo's comment on MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-7063997855):
+  a `binding` or `policy` decision now names the rule that decided, `authority.rule`, a JSON Pointer into the policy
+  document (`/rules/OTP`, or `/default`), and the policy it came from, `authority.policy`, the digest of the canonical
+  policy document (the digest egress receipts already carry as `policy`). Policies have no rule ids of their own, so
+  the pointer names the existing entry rather than a label. The two are recorded in the vault entry when the handle is
+  made, so a policy the app switches to later cannot change the standing of a handle it already made. They are left
+  out when no rule decided (an unknown handle, malformed arguments, a person's answer) and for entries of an older
+  vault. `Policy.rule_ref(type)` (`ruleRef`) gives the pointer.
+- **Checking the standing**: `verify_log(..., policies=[...])` (`verifyLog(..., { policies })`, `opn verify --policy
+  FILE_OR_PROFILE`) takes Policy objects or policy documents. A record that names a policy none of them has is a
+  problem, and so is a rule that is not the `handle` rule that applies to the record's data type in that policy.
+- **A Sensitive References audit id** (spec 10.5), from
+  [Sprinterli's comment on MCP PR 1913](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1913#issuecomment-7065740973)
+  (his draft's RESOLVER-PROFILE 12.4 and 15, change SC-28): `resolve_args(args, sink, audit_id=...)`
+  (`resolveArgs(args, sink, { auditId })`) puts the id the resolver returned into every release record of that call,
+  allowed or refused, as `audit_id`, so the server's audit event and the records join. The id must be 1 to 128
+  characters of `A-Z a-z 0-9 . _ -`; anything else raises before any check, write or fill. It is opaque and never looked
+  up in the vault, and the verifier's check for known values in a record covers it like every other field.
+- Spec 10.5 now describes that join instead of saying nothing links the two records, still claims no endorsement by
+  that project, and its field table gains the authority and `audit_id` rows of SC-28.
+- Schema: `authority.rule` and `authority.policy` (together, only with `binding` or `policy`) and `audit_id`.
+- Vectors: two new release cases (an audit id on every record of a call, with malformed ids refused; a policy's
+  default rule) and 19 new shape cases; every existing `binding` and `policy` record now carries its standing.
+  Conformance 237 to 266. Unit tests: Python 274 to 316, TypeScript 131 to 172. Each new check was disabled in turn
+  and a test failed.
+
 ## 0.4.0 (2026-11-21)
 
 A LiteLLM proxy guardrail, so any app behind a LiteLLM proxy gets Open Pseudonym from a few lines of `config.yaml`.
