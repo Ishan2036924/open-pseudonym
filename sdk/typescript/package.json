@@ -47,9 +47,9 @@
     }
   },
   "devDependencies": {
-    "@types/node": "24.19.2",
-    "ai": "7.0.148",
-    "fast-check": "4.10.2",
+    "@types/node": "26.6.6",
+    "ai": "7.0.176",
+    "fast-check": "4.10.3",
     "typescript": "7.0.2"
   },
   "keywords": [
