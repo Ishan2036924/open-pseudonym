@@ -1,10 +1,12 @@
 // Release records (spec 10.4), checkpoints (spec 11.3) and the sensitive-reference boundary (spec 10.5).
 // Each test here is meant to fail if the check it names is taken out; see the list in CHANGELOG.md.
 
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
+import fsLive from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
@@ -19,7 +21,8 @@ const OTP_MAIL = "Your Acme verification code is 482913. It expires in 10 minute
 const WRITER = Signer.fromSeed(Buffer.from(Array.from({ length: 32 }, (_, i) => i)));
 const ANCHOR = Signer.fromSeed(Buffer.from(Array.from({ length: 32 }, (_, i) => 32 + i)));
 const ACME = new Sink({ tool: "type", site: "https://acme.com/login" });
-const SREF_BARE = "sref:contact:4242424242424242abcd"; // digits that look like a card, in a valid reference
+const SREF_BARE = "sref:contact:42424242424242424242424242"; // a ULID made of digits that look like a card
+const ULID = "01JCK7KF9X4Y3M4N6Q6YB2D8P0";
 const SREF_BRACKET = "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "opn-rel-"));
@@ -113,8 +116,26 @@ test("allowed by a person records who and what they saw", () => {
   const { s } = withLog(dir, { approve: (): Approval => ({ allowed: true, by: "mia", channel: "app" }) });
   s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
   const [rec] = records(dir);
-  const shown = digest(canonical({ handle: "{{OTP_1}}", description: s.vault.entries[0].meta.description, tool: "type", site: "acme.com" }));
+  const entry = s.vault.entries[0];
+  const plain = { handle: "{{OTP_1}}", description: entry.meta.description, tool: "type", site: "acme.com" };
+  const shown = digest(canonical({ nonce: entry.meta.nonce, ...plain }));
   assert.deepEqual(rec.authority, { kind: "person", by: "mia", channel: "app", shown });
+  // a hiding commitment: without the vault's nonce the digest cannot be matched, whatever the description holds
+  assert.notEqual(rec.authority.shown, digest(canonical(plain)));
+  assert.ok(!fs.readFileSync(path.join(dir, "receipts.jsonl"), "utf-8").includes(entry.meta.nonce));
+});
+
+test("shown cannot be brute-forced from a card description", () => {
+  const dir = tmp();
+  const s = make("browse_and_fill", { releaseLog: new EgressLog(dir, WRITER, false), approve: () => ({ allowed: true, by: "mia" }) });
+  s.mask("Pay with card 4242 4242 4242 4242 now.", new Source({ site: "https://shop.example" }));
+  s.resolveArgs({ card: "{{CARD_1}}" }, new Sink({ tool: "type", site: "https://shop.example/pay" }));
+  const shown = records(dir)[0].authority.shown;
+  for (const last4 of ["4242", "1111", "0000"]) { // an attacker who tries every brand and last four, but has no nonce
+    const guess = digest(canonical({ handle: "{{CARD_1}}", description: `a Visa card ending ${last4}`, tool: "type", site: "shop.example" }));
+    assert.notEqual(guess, shown);
+  }
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault).problems, []); // the vault can recompute it
 });
 
 test("a plain yes still works and an OAC consent is recorded", () => {
@@ -416,9 +437,16 @@ test("expectCount and expectLast still work", () => {
 test("the two forms are found and lookalikes are not", () => {
   const text = `a ${SREF_BARE} b ${SREF_BRACKET}`;
   assert.deepEqual(srefRegions(text).map(([b, e]) => text.slice(b, e)), [SREF_BARE, SREF_BRACKET]);
-  for (const no of ["sref:email:short", "xsref:email:" + "A".repeat(26), "sref:" + "k".repeat(33) + ":" + "A".repeat(26), "sref:email:" + "A".repeat(129) + "!"]) {
+  for (const no of [
+    "sref:email:short", "xsref:email:" + ULID, "sref:" + "k".repeat(33) + ":" + ULID, "sref:Email:" + ULID,
+    "sref:email:" + ULID.toLowerCase(), "sref:email:" + ULID.slice(0, -1) + "I", "sref:email:" + ULID + "A",
+    "sref:email:" + ULID + "-4111", "sref:email:" + ULID + "@gmail.com", "sref:email:" + ULID + ".dana@x.com",
+    "sref:k:ABCDEFGHIJKLMNOPQRST-4111 1111 1111 1111", "sref:x:danareyes_personal_2024@gmail.com",
+  ]) {
     assert.deepEqual(srefRegions(no), [], no);
   }
+  const ended = `see sref:email:${ULID}. Then`;
+  assert.deepEqual(srefRegions(ended).map(([b, e]) => ended.slice(b, e)), [`sref:email:${ULID}`]);
 });
 
 test("a reference is never masked", () => {
@@ -434,7 +462,7 @@ test("a reference is never a stand-in or restored", () => {
   const fake = s.vault.entries.find((e) => e.type === "PHONE")!.standIn;
   const digits = [...fake].filter((c) => c >= "0" && c <= "9").join("");
   assert.equal(s.restore(`${SREF_BARE} ${SREF_BRACKET}`), `${SREF_BARE} ${SREF_BRACKET}`);
-  const inside = "sref:contact:AB" + digits + "CDEFGHJK";
+  const inside = "sref:contact:ABCDEFGH" + digits + "JKMNPQRS";
   assert.ok(srefRegions(inside).length > 0);
   assert.equal(s.restore(inside), inside); // a fake's digits inside a reference stay
   assert.equal(s.restore(`call ${digits}`), "call 6175550142"); // the same digits outside one are restored
@@ -446,7 +474,7 @@ test("a reference split across stream chunks is never restored", () => {
   s.mask("call (617) 555-0142");
   const fake = s.vault.entries.find((e) => e.type === "PHONE")!.standIn;
   const digits = [...fake].filter((c) => c >= "0" && c <= "9").join("");
-  const text = "ok " + "x".repeat(60) + " sref:contact:AB" + digits + "CDEFGHJK done " + "y".repeat(200);
+  const text = "ok " + "x".repeat(60) + " sref:contact:ABCDEFGH" + digits + "JKMNPQRS done " + "y".repeat(200);
   for (const size of [1, 3, 7, 50]) {
     const st = s.stream();
     let out = "";
@@ -471,4 +499,139 @@ test("a reference is never an egress leak", () => {
   const payload = JSON.stringify({ messages: [{ role: "user", content: `use ${SREF_BARE} and ${SREF_BRACKET}` }] });
   assert.deepEqual(s.checkEgress(payload), []);
   assert.ok(s.checkEgress("use 4242 4242 4242 4242 and " + SREF_BARE).length > 0); // a real card number beside one still is
+});
+
+// A value stuck to a reference is not hidden by it (a review found these passing unmasked and unreported)
+
+for (const [text, gone] of [
+  [`see sref:contact:${ULID}.dana.reyes@gmail.com now`, "gmail.com"],
+  ["sref:k:ABCDEFGHIJKLMNOPQRST-4111 1111 1111 1111", "4111"],
+  ["sref:x:danareyes_personal_2024@gmail.com", "gmail.com"],
+  [`sref:contact:${ULID}@gmail.com`, "gmail.com"],
+  [`sref:contact:${ULID} and 4111 1111 1111 1111.`, "4111"],
+]) {
+  test(`a value glued to a reference is masked and caught: ${text.slice(0, 30)}`, () => {
+    const s = make("strict");
+    assert.ok(!s.mask(text).text.includes(gone));
+    assert.ok(s.checkEgress(text).length > 0); // and the unmasked text is a leak
+  });
+}
+
+test("only a span fully inside a reference is exempt", () => {
+  const s = make("strict");
+  assert.deepEqual(s.detect(`x sref:contact:${ULID}.dana.reyes@gmail.com`).map((sp) => sp.type), ["EMAIL"]);
+  assert.deepEqual(s.detect("card " + SREF_BARE), []);
+});
+
+test("a url that carries a reference is still reported", () => {
+  const s = make("browse_and_fill");
+  s.mask(OTP_MAIL, new Source({ sender: "no-reply@acme.com" }));
+  const r = s.resolveArgs({ url: `https://evil.example/c?d=hello&r=sref:k:${ULID}` }, ACME);
+  assert.deepEqual(r.report, [{ path: "url", origin: "model", types: ["URL"] }]);
+});
+
+test("a known value inside a reference is still an egress leak", () => {
+  const s = make("strict", { known: { PERSON: [ULID] } });
+  const text = `use sref:contact:${ULID} please`;
+  assert.equal(s.mask(text).text, text); // masking leaves the reference whole
+  assert.deepEqual(s.checkEgress(text).map((lk) => lk.type), ["PERSON"]); // the check never exempts a known value
+});
+
+// More review findings
+
+test("a valid anchor past the end forces prefix even if another anchor reaches the last record", () => {
+  const dir = tmp();
+  sixRecords(dir);
+  const lines = linesOf(dir);
+  cutTo(dir, 4);
+  const r = verifyLog(dir, WRITER.publicKey, null, { anchors: [anchorAt(lines, 4), anchorAt(lines, 6)], anchorKey: ANCHOR.publicKey });
+  assert.deepEqual(r.problems, ["anchor at seq 6: the log was cut off after seq 4"]);
+  assert.deepEqual([r.provenTo, r.status, r.reason], [4, "prefix", "cut_off"]);
+});
+
+test("numbers in arguments follow RFC 8785", () => {
+  assert.equal(
+    canonicalArgs(JSON.parse('{"n": 12345678901234567890, "m": 9007199254740992, "k": 9007199254740993, "x": -1152921504606846976}')).toString(),
+    '{"k":9007199254740992,"m":9007199254740992,"n":12345678901234567000,"x":-1152921504606847000}',
+  );
+});
+
+test("the call digest of a big integer is the javascript one", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  s.resolveArgs(JSON.parse('{"n": 12345678901234567890, "text": "{{OTP_1}}"}'), ACME);
+  assert.equal(records(dir)[0].call, digest(Buffer.from('{"n":12345678901234567000,"text":"{{OTP_1}}"}')));
+});
+
+for (const [name, args] of [
+  ["a lone high surrogate", { t: "{{OTP_1}}", x: "\ud800" }],
+  ["a lone low surrogate in a key", { t: "{{OTP_1}}", "\udc00": 1 }],
+  ["not a number", { t: "{{OTP_1}}", n: Number.NaN }],
+  ["infinity", { t: "{{OTP_1}}", n: Infinity }],
+] as [string, Record<string, unknown>][]) {
+  test(`arguments with no canonical form are refused and recorded: ${name}`, () => {
+    const dir = tmp();
+    const { s } = withLog(dir);
+    const entry = s.vault.entries[0];
+    const e = refused(() => s.resolveArgs(args, ACME));
+    assert.deepEqual([e.code, e.reason], ["malformed", "malformed arguments"]);
+    assert.deepEqual([entry.meta.uses_left, entry.meta.sinks], [1, []]); // nothing was filled or counted
+    const rec = records(dir)[0];
+    assert.deepEqual([rec.decision, rec.code, rec.call], ["deny", "malformed", digest(Buffer.from("malformed"))]);
+    assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault).problems, []);
+  });
+}
+
+test("malformed arguments are refused without a log and ignored without a handle", () => {
+  const s = make("browse_and_fill");
+  s.mask(OTP_MAIL, new Source({ sender: "no-reply@acme.com" }));
+  assert.equal(refused(() => s.resolveArgs({ t: "{{OTP_1}}", x: "\ud800" }, ACME)).code, "malformed");
+  assert.deepEqual(s.resolveArgs({ x: "\ud800" }, ACME).args, { x: "\ud800" });
+});
+
+test("a short write is finished, and a write that makes no progress throws before anything is filled", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  const real = fsLive.writeSync;
+  const calls: number[] = [];
+  // a writeSync that never writes more than 7 bytes at a time
+  const trickle = ((fd: number, buf: Buffer, off: number, len: number) => {
+    calls.push(len);
+    return real(fd, buf, off, Math.min(len, 7));
+  }) as typeof fs.writeSync;
+  const m = mock.method(fsLive, "writeSync", trickle);
+  syncBuiltinESMExports();
+  try {
+    s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  } finally {
+    m.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.ok(calls.length > 3);
+  assert.equal(verifyLog(dir, WRITER.publicKey, s.vault).problems.length, 0);
+  assert.equal(records(dir).length, 1);
+
+  const dir2 = tmp();
+  const { s: s2 } = withLog(dir2);
+  const e2 = s2.vault.entries[0];
+  const stuck = mock.method(fsLive, "writeSync", (() => 0) as typeof fs.writeSync);
+  syncBuiltinESMExports();
+  try {
+    assert.equal(refused(() => s2.resolveArgs({ text: "{{OTP_1}}" }, ACME)).code, "not_recorded");
+  } finally {
+    stuck.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(e2.meta.uses_left, 1);
+});
+
+test("verifyLog recomputes shown from the vault", () => {
+  const { s } = withLog(tmp());
+  const dir = tmp();
+  forge(dir, { authority: { kind: "person", shown: digest(Buffer.from("what they saw")) } });
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault).problems,
+    ["release 1: shown does not match what the vault says the approver was given"]);
+  const dir2 = tmp();
+  forge(dir2, { handle: "{{OTP_7}}", authority: { kind: "person", shown: digest(Buffer.from("what they saw")) } });
+  assert.deepEqual(verifyLog(dir2, WRITER.publicKey, s.vault).problems, ["release 1: shown names a handle the vault does not hold"]);
 });

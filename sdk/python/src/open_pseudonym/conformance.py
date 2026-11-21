@@ -207,7 +207,8 @@ def run_release_case(case: dict, folder: Path) -> dict:
             os.rmdir(folder / "receipts.jsonl")
             continue
         try:
-            results.append({"args": s.resolve_args(st["args"], Sink(**st["sink"])).args})
+            args = json.loads(st["args_json"]) if "args_json" in st else st["args"]
+            results.append({"args": s.resolve_args(args, Sink(**st["sink"])).args})
         except HandleRefused as exc:
             results.append({"refused": exc.reason, "code": exc.code})
     tokens = read_lines(folder)

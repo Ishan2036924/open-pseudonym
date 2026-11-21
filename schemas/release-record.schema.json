@@ -117,7 +117,8 @@
     "wrong_tool",
     "wrong_site",
     "needs_approval",
-    "not_approved"
+    "not_approved",
+    "malformed"
    ]
   },
   "reason": {

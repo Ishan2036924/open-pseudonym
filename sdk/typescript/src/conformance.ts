@@ -211,7 +211,8 @@ function runReleaseCase(c: any, dir: string) {
       continue;
     }
     try {
-      results.push({ args: s.resolveArgs(st.args, new Sink(st.sink)).args });
+      const args = st.args_json !== undefined ? JSON.parse(st.args_json) : st.args;
+      results.push({ args: s.resolveArgs(args, new Sink(st.sink)).args });
     } catch (exc) {
       if (!(exc instanceof HandleRefused)) throw exc;
       results.push({ refused: exc.reason, code: exc.code });

@@ -70,12 +70,23 @@ def _es6_number(x: float) -> str:
 def _enc_loose(v) -> str:
     if isinstance(v, float):
         return _es6_number(v)
+    if isinstance(v, int) and not isinstance(v, bool):
+        # RFC 8785 numbers are IEEE doubles: an integer past 2^53 is written as the nearest double, as JavaScript does
+        return str(v) if -(2 ** 53) <= v <= 2 ** 53 else _es6_number(float(v))  # float() raises OverflowError past 1e308
     if isinstance(v, (list, tuple)):
         return "[" + ",".join(_enc_loose(x) for x in v) + "]"
     if isinstance(v, dict):
         keys = sorted(v, key=_utf16_key)
-        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + _enc_loose(v[k]) for k in keys) + "}"
+        return "{" + ",".join(_enc_str(k) + ":" + _enc_loose(v[k]) for k in keys) + "}"
+    if isinstance(v, str):
+        return _enc_str(v)
     return _enc(v)
+
+
+def _enc_str(s: str) -> str:
+    # a lone surrogate is not text: canonical_args() ends in .encode("utf-8"), which refuses it with UnicodeEncodeError,
+    # where JavaScript would escape it; the TypeScript SDK refuses it too, so both give no canonical form
+    return json.dumps(s, ensure_ascii=False)
 
 
 def b64url(data: bytes) -> str:

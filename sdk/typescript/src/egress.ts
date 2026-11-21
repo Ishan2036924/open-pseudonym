@@ -17,7 +17,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { ambiguousNames, cueOnly, stopwords } from "./checks.ts";
 import { KnownDetector, type Form } from "./detect.ts";
-import { CODES, DIGEST, HANDLE } from "./handles.ts";
+import { CODES, DIGEST, HANDLE, shownDigest } from "./handles.ts";
 import { b64urlDecode, canonical, digest } from "./jcs.ts";
 import { keyId, SignatureError, type Signer, verify } from "./jws.ts";
 import { Restorer } from "./restore.ts";
@@ -260,7 +260,7 @@ export class EgressLog {
     try {
       const fd = fs.openSync(this.receipts, "a");
       try {
-        fs.writeSync(fd, tokens.map((t) => t + "\n").join(""));
+        writeAll(fd, Buffer.from(tokens.map((t) => t + "\n").join(""), "ascii"));
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
@@ -294,6 +294,16 @@ export class EgressLog {
     if (anchor.kid === this.signer.kid) throw new RangeError("a checkpoint must be signed by a key the log writer does not hold");
     if (this.seq === 0 || this.prev === null) throw new RangeError("the log is empty");
     return makeCheckpoint(anchor, { session: o.session, seq: this.seq, head: this.prev, now: o.now });
+  }
+}
+
+/** Write every byte, or throw: a short write must never be followed by a fill (writeSync may write less than asked). */
+function writeAll(fd: number, bytes: Buffer): void {
+  let done = 0;
+  while (done < bytes.length) {
+    const n = fs.writeSync(fd, bytes, done, bytes.length - done);
+    if (!(n > 0)) throw new Error("the log could not be written in full");
+    done += n;
   }
 }
 
@@ -355,8 +365,8 @@ export interface LogReport {
   provenTo: number | null;
   /** "complete": the last record is vouched for. "prefix": the records are valid as far as they go, the end is not proven. */
   status: "complete" | "prefix";
-  /** Why the log is not complete: "no_anchor" or "unanchored_tail". */
-  reason: "no_anchor" | "unanchored_tail" | null;
+  /** Why the log is not complete: "cut_off" (a valid checkpoint lies past the end), "no_anchor" or "unanchored_tail". */
+  reason: "cut_off" | "no_anchor" | "unanchored_tail" | null;
 }
 
 export interface VerifyOptions {
@@ -429,6 +439,7 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
       const bad = releaseProblems(i, body);
       problems.push(...bad);
       if (vault && bad.length === 0) {
+        problems.push(...shownProblems(i, body, vault));
         const found = check(vault, canonical(body), restorer);
         leaksTotal += found.length;
         if (found.length > 0) problems.push(`release ${i}: ${found.length} known value(s) found in the record`);
@@ -464,11 +475,11 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
   if (o.expectLast != null && o.expectLast !== prev) {
     problems.push("the last receipt is not the one you recorded: the log was cut or replaced");
   }
-  const proven = provenTo(lines, publicKey, o.anchors ?? [], o.anchorKey ?? null, o.expectSession ?? session0, problems);
-  const complete = proven !== null && proven === lines.length;
+  const [proven, cut] = provenTo(lines, publicKey, o.anchors ?? [], o.anchorKey ?? null, o.expectSession ?? session0, problems);
+  const complete = proven !== null && proven === lines.length && !cut;
   return {
     receipts: lines.length, releases, rechecked, leaks: leaksTotal, problems, last: prev, provenTo: proven,
-    status: complete ? "complete" : "prefix", reason: complete ? null : proven === null ? "no_anchor" : "unanchored_tail",
+    status: complete ? "complete" : "prefix", reason: complete ? null : cut ? "cut_off" : proven === null ? "no_anchor" : "unanchored_tail",
   };
 }
 
@@ -483,6 +494,16 @@ function lineTyp(token: string): string {
   } catch {
     return RECEIPT_TYP;
   }
+}
+
+/** With the vault, recompute `shown` (spec 10.4) from the entry, its secret nonce and the record's tool and site. */
+function shownProblems(i: number, body: Record<string, any>, vault: Vault): string[] {
+  const shown = body.authority.shown;
+  if (shown === undefined) return [];
+  const entry = vault.entries.find((e) => e.action === "handle" && e.standIn === body.handle);
+  if (entry === undefined) return [`release ${i}: shown names a handle the vault does not hold`];
+  const want = shownDigest(vault.releaseNonce(entry, false), body.handle, entry.meta.description ?? "", body.sink.tool, body.sink.site);
+  return want === shown ? [] : [`release ${i}: shown does not match what the vault says the approver was given`];
 }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
@@ -528,22 +549,24 @@ export function releaseProblems(i: number, body: Record<string, any>): string[] 
 }
 
 /**
- * The highest sequence number a valid checkpoint vouches for. Problems are appended for every checkpoint that does
- * not hold up, in particular one past the end of the log (the end was cut off) and one made by the writer's own key.
+ * The highest sequence number a valid checkpoint vouches for, and whether a valid one lies past the end of the log (the
+ * end was cut off). Problems are appended for every checkpoint that does not hold up, in particular one past the end and
+ * one made by the writer's own key.
  */
 function provenTo(lines: string[], publicKey: KeyObject, anchorsIn: Iterable<string>, anchorKey: KeyObject | null,
-                  session: string | null, problems: string[]): number | null {
+                  session: string | null, problems: string[]): [number | null, boolean] {
   const anchors = [...anchorsIn];
-  if (anchors.length === 0) return null;
+  if (anchors.length === 0) return [null, false];
   if (anchorKey === null) {
     problems.push("anchors were given without an anchor_key to check them with");
-    return null;
+    return [null, false];
   }
   if (keyId(anchorKey) === keyId(publicKey)) {
     problems.push("the anchor key is the key that signs the log: a checkpoint must come from a key the writer does not hold");
-    return null;
+    return [null, false];
   }
   let proven: number | null = null;
+  let cut = false;
   for (const [idx, token] of anchors.entries()) {
     const n = idx + 1;
     let body: Record<string, any>;
@@ -566,13 +589,14 @@ function provenTo(lines: string[], publicKey: KeyObject, anchorsIn: Iterable<str
     const seq = body.seq as number;
     if (seq > lines.length) {
       problems.push(`anchor at seq ${seq}: the log was cut off after seq ${lines.length}`);
+      cut = true;
     } else if (body.head !== safeDigest(lines[seq - 1])) {
       problems.push(`anchor at seq ${seq}: head does not match receipt ${seq}: the log was changed or replaced`);
     } else {
       proven = proven === null ? seq : Math.max(proven, seq);
     }
   }
-  return proven;
+  return [proven, cut];
 }
 
 function safeDigest(token: string): string {

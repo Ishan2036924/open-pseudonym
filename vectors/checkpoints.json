@@ -143,9 +143,34 @@
     ],
     "proven_to": null,
     "status": "prefix",
-    "reason": "no_anchor"
+    "reason": "cut_off"
    },
    "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
+   ]
+  },
+  {
+   "name": "6 records cut to 4, anchors at 4 and 6: the one past the end wins",
+   "keep": 4,
+   "anchors": [
+    {
+     "seq": 4
+    },
+    {
+     "seq": 6
+    }
+   ],
+   "expect": {
+    "receipts": 4,
+    "problems": [
+     "anchor at seq 6: the log was cut off after seq 4"
+    ],
+    "proven_to": 4,
+    "status": "prefix",
+    "reason": "cut_off"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpTRFNxUWhNb2RNcDlLb214Z01abFRtZ2hBSDRPaWs5RF9IbnZxb0tONUY0IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjQsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0._fh1mlZ2RutvzpbBrTPeWUnYHeWdN5z5JydEBm-Ra9R4oqiqPEKdrPaM_vVGIbdyjMFGb80KgHQU3CuiJkQDAw",
     "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
    ]
   },

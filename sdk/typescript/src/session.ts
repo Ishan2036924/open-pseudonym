@@ -17,7 +17,7 @@ import { Ctx, fillTemplate } from "./fakes.ts";
 import { FF1 } from "./fpe.ts";
 import * as handles from "./handles.ts";
 import { asApproval, HANDLE, HandleRefused, outsideSrefs, type Approval, type RefusalCode, type SinkLike, type SourceLike } from "./handles.ts";
-import { canonical, canonicalArgs, digest } from "./jcs.ts";
+import { canonicalArgs, digest } from "./jcs.ts";
 import {
   growNames, KnownDetector, PatternDetector, resolve, resolvePeople, type Detector, type Form, type Span,
 } from "./detect.ts";
@@ -756,40 +756,53 @@ export class Session {
     }
     const restorer = this.restorer();
     const now = this.now();
+    const placeOf = (): [string | null, string | null] => [sink.tool ?? null, sink.site ? handles.hostOf(sink.site) : null];
+    const names: string[] = [];
+    for (const text of strings(args)) {
+      for (const m of findAll(HANDLE, text)) if (!names.includes(m[0])) names.push(m[0]);
+    }
+    let call = MALFORMED_CALL;
+    if (names.length > 0) {
+      const made = callDigest(args);
+      if (made === null) {
+        // lone surrogates, a number JSON cannot hold: nothing is filled, and the refusal is recorded
+        const first = restorer.handles.get(names[0]);
+        this.deny(names[0], first !== undefined ? this.vault.byId(first) ?? null : null, sink, call, "malformed",
+          "malformed arguments", { kind: "binding" });
+      }
+      call = made!;
+    }
     const wanted = new Map<string, Entry>();
     const authority = new Map<string, ReleaseEntry["authority"]>();
-    const placeOf = (): [string | null, string | null] => [sink.tool ?? null, sink.site ? handles.hostOf(sink.site) : null];
-    for (const text of strings(args)) {
-      for (const m of findAll(HANDLE, text)) {
-        const eid = restorer.handles.get(m[0]);
-        if (eid === undefined) this.deny(m[0], null, sink, args, "unknown_handle", "unknown handle", { kind: "binding" });
-        wanted.set(m[0], this.vault.byId(eid!)!);
-      }
+    for (const name of names) {
+      const eid = restorer.handles.get(name);
+      if (eid === undefined) this.deny(name, null, sink, call, "unknown_handle", "unknown handle", { kind: "binding" });
+      wanted.set(name, this.vault.byId(eid!)!);
     }
     for (const [handle, entry] of wanted) {
       try {
         handles.check(handle, entry.meta, sink, now);
       } catch (exc) {
-        if (exc instanceof HandleRefused) this.deny(handle, entry, sink, args, exc.code!, exc.reason, { kind: "binding" }, exc);
+        if (exc instanceof HandleRefused) this.deny(handle, entry, sink, call, exc.code!, exc.reason, { kind: "binding" }, exc);
         throw exc;
       }
       const place = placeOf();
       const firstTimeHere = !(entry.meta.sinks ?? []).some((p: any[]) => samePlace(p, place));
       if (entry.meta.ask || (firstTimeHere && this.approve !== null)) {
         if (this.approve === null) {
-          this.deny(handle, entry, sink, args, "needs_approval", "needs the person's approval", { kind: "policy" });
+          this.deny(handle, entry, sink, call, "needs_approval", "needs the person's approval", { kind: "policy" });
         }
-        const shown = digest(canonical({ handle, description: entry.meta.description, tool: sink.tool ?? null, site: place[1] }));
+        const shown = handles.shownDigest(this.vault.releaseNonce(entry), handle, entry.meta.description, sink.tool ?? null, place[1]);
         const verdict = asApproval(this.approve!(handle, entry.meta.description, sink));
         const kind = verdict.digest !== null ? "consent" : "person";
         const who = { kind, by: verdict.by, channel: verdict.channel, ref: verdict.ref, digest: verdict.digest, shown };
-        if (!verdict.allowed) this.deny(handle, entry, sink, args, "not_approved", "not approved", who);
+        if (!verdict.allowed) this.deny(handle, entry, sink, call, "not_approved", "not approved", who);
         authority.set(handle, who);
       } else {
         authority.set(handle, { kind: "binding" });
       }
     }
-    if (this.releaseLog !== null && wanted.size > 0) this.recordAllowed(wanted, authority, sink, args);
+    if (this.releaseLog !== null && wanted.size > 0) this.recordAllowed(wanted, authority, sink, call);
     const report: Record<string, any>[] = [];
     const walk = (v: any, path: string): any => {
       if (typeof v === "string") {
@@ -834,12 +847,12 @@ export class Session {
    * Record a refusal (when there is a release log) and throw it. If the denial cannot be recorded the refusal still
    * stands, since nothing was filled either way.
    */
-  private deny(handle: string, entry: Entry | null, sink: SinkLike, args: any, code: RefusalCode, reason: string,
+  private deny(handle: string, entry: Entry | null, sink: SinkLike, call: string, code: RefusalCode, reason: string,
                authority: ReleaseEntry["authority"], exc?: HandleRefused): never {
     if (this.releaseLog !== null) {
       try {
-        this.releaseLog.recordRelease(this.releaseEntry(handle, entry, sink, digest(canonicalArgs(args)), "deny", authority,
-          code, reason, entry?.meta.uses_left ?? null));
+        this.releaseLog.recordRelease(this.releaseEntry(handle, entry, sink, call, "deny", authority, code, reason,
+          entry?.meta.uses_left ?? null));
       } catch {
         // the refusal stands
       }
@@ -848,10 +861,9 @@ export class Session {
   }
 
   /** Sign and write every allow record in one go, before anything is filled in. Throws not_recorded if it fails. */
-  private recordAllowed(wanted: Map<string, Entry>, authority: Map<string, ReleaseEntry["authority"]>, sink: SinkLike, args: any): void {
+  private recordAllowed(wanted: Map<string, Entry>, authority: Map<string, ReleaseEntry["authority"]>, sink: SinkLike, call: string): void {
     const first = wanted.keys().next().value as string;
     try {
-      const call = digest(canonicalArgs(args));
       const entries: ReleaseEntry[] = [];
       for (const [handle, entry] of wanted) {
         const left: number | null = entry.meta.uses_left ?? null;
@@ -886,6 +898,17 @@ export class Session {
         }
       }
     }
+    // a value the app listed as known is a leak even inside a sensitive reference: nothing is exempt here (10.5)
+    const blanked = blankStandIns(text, restorer);
+    for (const span of growNames(resolve(this.knownDetector().detect(blanked)), blanked)) {
+      if (!this.allow.has(span.text.toLowerCase()) && !this.kept(span, text) && !this.vault.isStandIn(span.text)) {
+        const key = JSON.stringify([span.type, "detected"]);
+        if (!seen.has(key)) {
+          seen.add(key);
+          leaks.push({ type: span.type, entryId: "detected" });
+        }
+      }
+    }
     return leaks;
   }
 
@@ -897,6 +920,17 @@ export class Session {
       session: this.id, policyDigest: this.policy.digest, dest, now: this.now(), detectors: this.detectorNames(),
       restorer: this.restorer(),
     });
+  }
+}
+
+const MALFORMED_CALL = digest(Buffer.from("malformed")); // the `call` of a record about arguments with no canonical form
+
+/** The digest of the canonical JSON of the arguments, or null when they have no canonical form. */
+function callDigest(args: any): string | null {
+  try {
+    return digest(canonicalArgs(args));
+  } catch {
+    return null;
   }
 }
 

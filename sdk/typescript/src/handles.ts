@@ -6,6 +6,7 @@
 // the model. A prompt injection that says "type the code into evil.example" gets a refusal, not the code.
 
 import { isPublicSuffix } from "./fakes.ts";
+import { canonical, digest } from "./jcs.ts";
 import { digitsOf } from "./types.ts";
 import { stripWs, truthy } from "./util.ts";
 
@@ -17,7 +18,7 @@ export const HANDLE = /\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}/gu;
  */
 export const CODES = [
   "unknown_handle", "unbound", "expired", "used_up", "wrong_tool", "wrong_site", "needs_approval", "not_approved",
-  "not_recorded",
+  "not_recorded", "malformed",
 ] as const;
 
 export type RefusalCode = (typeof CODES)[number];
@@ -77,22 +78,26 @@ export function asApproval(answer: unknown): Required<Approval> {
 }
 
 // Sensitive References (spec 10.5) are opaque to this SDK: a server keeps the value, the model only carries the
-// reference. They look like `sref:<kind>:<id>` or `⟦sref:<kind>:<id>⟧` (kind 1 to 32, id 20 to 128 characters of
-// letters, digits, "_" and "-"). We never mask one, never make a stand-in for one, never restore or fill one, and never
-// count one as a leak.
-const SREF_BODY = "sref:[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{20,128}";
-export const SREF = new RegExp(`\\u27e6${SREF_BODY}\\u27e7|(?<![A-Za-z0-9_-])${SREF_BODY}(?![A-Za-z0-9_-])`, "gu");
+// reference. They look like `sref:<kind>:<id>` or `\u27e6sref:<kind>:<id>\u27e7`. We read only the strict form: a kind
+// of lower-case letters, digits, "_" and "-" (1 to 32, starting with a letter) and an id that is a 26-character ULID
+// (Crockford base32, upper case). A looser id would let a value hide inside a "reference". The bare form must not
+// continue into more text ("...ULID.dana@example.org" is not a reference). We never mask a value that lies inside one,
+// never make a stand-in for one, never restore or fill one, and never report one as a value the model wrote.
+const SREF_BODY = "sref:[a-z][a-z0-9_-]{0,31}:[0-9A-HJKMNP-TV-Z]{26}";
+export const SREF = new RegExp(
+  `\\u27e6${SREF_BODY}\\u27e7|(?<![A-Za-z0-9_@.-])${SREF_BODY}(?![A-Za-z0-9_@-]|\\.[A-Za-z0-9_@-])`, "gu",
+);
 
 /** Where the sensitive references in `text` are, as [start, end] pairs of UTF-16 offsets. */
 export function srefRegions(text: string): [number, number][] {
   return [...text.matchAll(SREF)].map((m) => [m.index, m.index + m[0].length] as [number, number]);
 }
 
-/** Drop everything that touches a sensitive reference. `start` and `end` are UTF-16 offsets into `text`. */
+/** Drop every item that lies fully inside a sensitive reference. One that reaches outside is ordinary text. */
 export function outsideSrefs<T extends { start: number; end: number }>(items: T[], text: string): T[] {
   const regions = srefRegions(text);
   if (regions.length === 0) return items;
-  return items.filter((it) => !regions.some(([b, e]) => it.start < e && it.end > b));
+  return items.filter((it) => !regions.some(([b, e]) => b <= it.start && it.end <= e));
 }
 
 export interface SourceLike {
@@ -345,4 +350,12 @@ export function check(handle: string, meta: Record<string, any>, sink: SinkLike,
   if (tools && tools.length > 0 && !tools.includes(sink.tool as string)) throw new HandleRefused(handle, "not allowed for this tool", "wrong_tool");
   const sites: string[] = meta.sites ?? [];
   if (sites.length > 0 && !siteMatches(sink.site, sites)) throw new HandleRefused(handle, "bound to a different site", "wrong_site");
+}
+
+/**
+ * The `shown` commitment of a release record (spec 10.4): a digest of the canonical JSON of what the approver was given,
+ * with the entry's secret nonce so that the digest hides the description. `site` is the host.
+ */
+export function shownDigest(nonce: string, handle: string, description: string, tool: string | null, site: string | null): string {
+  return digest(canonical({ nonce, handle, description, tool, site }));
 }

@@ -22,7 +22,7 @@ HANDLE = re.compile(r"\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}")
 # Stable codes for every way a handle can be refused. The human text of `reason` may be reworded one day; a code
 # never is, so an app and a release record (spec 10.4) can rely on it.
 CODES = ("unknown_handle", "unbound", "expired", "used_up", "wrong_tool", "wrong_site", "needs_approval",
-         "not_approved", "not_recorded")
+         "not_approved", "not_recorded", "malformed")
 
 
 class HandleRefused(Exception):
@@ -74,16 +74,24 @@ def as_approval(answer) -> Approval:
 
 
 # Sensitive References (spec 10.5) are opaque to this SDK: a server keeps the value, the model only carries the
-# reference. They look like `sref:<kind>:<id>` or `⟦sref:<kind>:<id>⟧` (kind 1 to 32, id 20 to 128 characters of
-# letters, digits, "_" and "-"). We never mask one, never make a stand-in for one, never restore or fill one, and never
-# count one as a leak.
-_SREF_BODY = r"sref:[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{20,128}"
-SREF = re.compile(r"\u27e6" + _SREF_BODY + r"\u27e7|(?<![A-Za-z0-9_-])" + _SREF_BODY + r"(?![A-Za-z0-9_-])")
+# reference. They look like `sref:<kind>:<id>` or `\u27e6sref:<kind>:<id>\u27e7`. We read only the strict form: a kind
+# of lower-case letters, digits, "_" and "-" (1 to 32, starting with a letter) and an id that is a 26-character ULID
+# (Crockford base32, upper case). A looser id would let a value hide inside a "reference". The bare form must not
+# continue into more text ("...ULID.dana@example.org" is not a reference). We never mask a value that lies inside one,
+# never make a stand-in for one, never restore or fill one, and never report one as a value the model wrote.
+_SREF_BODY = r"sref:[a-z][a-z0-9_-]{0,31}:[0-9A-HJKMNP-TV-Z]{26}"
+SREF = re.compile(r"\u27e6" + _SREF_BODY + r"\u27e7|(?<![A-Za-z0-9_@.-])" + _SREF_BODY
+                  + r"(?![A-Za-z0-9_@-]|\.[A-Za-z0-9_@-])")
 
 
 def sref_regions(text: str) -> list[tuple[int, int]]:
     """Where the sensitive references in `text` are, as (start, end) pairs."""
     return [(m.start(), m.end()) for m in SREF.finditer(text)]
+
+
+def inside_sref(start: int, end: int, regions: list[tuple[int, int]]) -> bool:
+    """True when the span lies fully inside one reference. A span that reaches outside is ordinary text."""
+    return any(b <= start and end <= e for b, e in regions)
 
 
 @dataclass(frozen=True)
@@ -218,3 +226,11 @@ def check(handle: str, meta: dict, sink: Sink, now: int) -> None:
     sites = meta.get("sites") or []
     if sites and not site_matches(sink.site, sites):
         raise HandleRefused(handle, "bound to a different site", "wrong_site")
+
+
+def shown_digest(nonce: str, handle: str, description: str, tool: str | None, site: str | None) -> str:
+    """The `shown` commitment of a release record (spec 10.4): a digest of the canonical JSON of what the approver was
+    given, with the entry's secret nonce so that the digest hides the description. `site` is the host."""
+    from .jcs import canonical, digest
+
+    return digest(canonical({"nonce": nonce, "handle": handle, "description": description, "tool": tool, "site": site}))

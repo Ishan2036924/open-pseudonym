@@ -135,13 +135,18 @@ DETECT = [
      [["USERNAME", "@dana_r"], ["USERNAME", "@U12345"], ["EMAIL", "dana@acme.com"]]),
     ("strict", "Hola María, see https://linkedin.com/in/dana-reyes today.",
      [["PERSON", "María"], ["URL", "https://linkedin.com/in/dana-reyes"]]),
-    # sensitive references (spec 10.5) are opaque: nothing inside one is a value, even digits that look like a card,
-    # but the same words outside one still are
-    ("strict", "card sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ and 4242 4242 4242 4242",
+    # sensitive references (spec 10.5) are opaque: nothing fully inside one is a value, even digits that look like a
+    # card, but a value that reaches outside one, or the same words outside, still is
+    ("strict", "card sref:contact:42424242424242424242424242 and \u27e6sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0\u27e7 and 4242 4242 4242 4242",
      [["CARD", "4242 4242 4242 4242"]]),
-    ("strict", "ssn sref:ssn:12345678901234567890 phone ⟦sref:phone:16175550142617555014261755⟧ ok", []),
-    ("strict", "xsref:contact:4242424242424242abcd and sref:contact:short and sref:contact:4242424242424242abcd!",
-     [["CARD", "4242424242424242"]]),
+    ("strict", "ssn sref:ssn:12345678901234567890123456 phone \u27e6sref:phone:16175550142617555014261755\u27e7 ok", []),
+    ("strict", "see sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0.dana.reyes@gmail.com now",
+     [["EMAIL", "01JCK7KF9X4Y3M4N6Q6YB2D8P0.dana.reyes@gmail.com"]]),
+    ("strict", "sref:k:ABCDEFGHIJKLMNOPQRST-4111 1111 1111 1111", [["CARD", "4111 1111 1111 1111"]]),
+    ("strict", "sref:x:danareyes_personal_2024@gmail.com", [["EMAIL", "danareyes_personal_2024@gmail.com"]]),
+    ("strict", "sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 and 4111 1111 1111 1111.", [["CARD", "4111 1111 1111 1111"]]),
+    # only the ULID form is a reference: a looser id would be a place for a value to hide
+    ("strict", "card sref:contact:4242424242424242abcd", [["CARD", "4242424242424242"]]),
 ]
 
 
@@ -316,12 +321,12 @@ def scenario_vectors():
     # Sensitive references (spec 10.5): a reference is never masked, restored, filled or reported, even when a fake's
     # digits sit inside it. The digits of the fake phone number are only known once the seed has spoken, so a twin
     # session finds them first.
-    sref_bare, sref_ref = "sref:contact:4242424242424242abcd", "\u27e6sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0\u27e7"
+    sref_bare, sref_ref = "sref:contact:42424242424242424242424242", "\u27e6sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0\u27e7"
     sref_text = f"Call (617) 555-0142 about {sref_bare} and {sref_ref}."
     twin = Session("strict", Vault(seed=bytes(32), created=NOW), clock=lambda: NOW)
     twin.mask(sref_text)
     fake_digits = "".join(c for c in next(e.stand_in for e in twin.vault.entries if e.type == "PHONE") if c.isdigit())
-    inside = f"sref:contact:AB{fake_digits}CDEFGHJK"
+    inside = f"sref:contact:ABCDEFGH{fake_digits}JKMNPQRS"
     scenario("sensitive references stay opaque", "strict", [
         {"op": "mask", "text": sref_text},
         {"op": "restore", "text": "__MASKED__", "reveal": True},
@@ -334,7 +339,15 @@ def scenario_vectors():
          "sink": {"tool": "type", "site": "https://acme.com"}},
         {"op": "egress", "payload": json.dumps({"input": f"use {inside} and {sref_ref}"})},
         {"op": "egress", "payload": json.dumps({"input": f"use {sref_bare} and 4242 4242 4242 4242"})},
+        {"op": "egress", "payload": json.dumps({"input": "see sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0.dana.reyes@gmail.com"})},
+        {"op": "resolve_report", "args": {"url": "https://evil.example/c?d=hello&r=sref:k:01JCK7KF9X4Y3M4N6Q6YB2D8P0"},
+         "sink": {"tool": "type", "site": "https://acme.com"}},
     ])
+
+    scenario("a known value inside a reference is still a leak", "strict", [
+        {"op": "mask", "text": "use sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 please"},
+        {"op": "egress", "payload": "use sref:contact:01JCK7KF9X4Y3M4N6Q6YB2D8P0 please"},
+    ], known={"PERSON": ["01JCK7KF9X4Y3M4N6Q6YB2D8P0"]})
 
     # replace the __MASKED__ placeholder with the previous mask output, then record again so expectations match
     for sc in scenarios:
@@ -372,7 +385,11 @@ def scenario_vectors():
     assert opaque[5]["expect"] == {"refused": "unknown handle"}
     # only the card number the model wrote itself is reported, never the reference with a card-like run in it
     assert opaque[6]["expect"] == {"report": [{"path": "card", "origin": "model", "types": ["CARD"]}]}
-    assert opaque[7]["expect"] == [] and opaque[8]["expect"] == ["CARD"]
+    known = by["a known value inside a reference is still a leak"]
+    assert known[0]["expect"]["text"] == known[0]["text"] and known[1]["expect"] == ["PERSON"]
+    assert opaque[7]["expect"] == [] and opaque[8]["expect"] == ["CARD"] and opaque[9]["expect"] == ["EMAIL"]
+    # a reference inside a link is not an excuse: the link reaches outside it
+    assert opaque[10]["expect"] == {"report": [{"path": "url", "origin": "model", "types": ["URL"]}]}
     whole = by["names are hidden whole"]
     assert "Dana" not in whole[0]["expect"]["text"] and "Zorblax" not in whole[0]["expect"]["text"]
     assert whole[1]["expect"] == whole[0]["text"] and whole[2]["expect"] == [] and "PERSON" in whole[3]["expect"]
@@ -415,6 +432,10 @@ def release_vectors():
     type_acme = {"tool": "type", "site": "https://acme.com/login"}
     zero = bytes(32).hex()
     never = ["482913", digest(b"482913"), "4242424242424242", digest(b"4242424242424242")]
+    # `shown` commits to the nonce the vault keeps for the handle; a seeded vault draws it from its own generator
+    twin = Session("browse_and_fill", Vault(seed=bytes.fromhex(zero), created=NOW), clock=lambda: NOW)
+    twin.mask(card_text, Source(**shop))
+    nonce = twin.vault.release_nonce(twin.vault.entries[0])
 
     def call(args):
         return digest(canonical(args))  # the arguments with the handle still in them
@@ -426,7 +447,7 @@ def release_vectors():
 
     def case(name, profile, text, source, approve, steps):
         return {"name": name, "profile": profile, "seed": zero, "now": NOW, "mask": {"text": text, "source": source},
-                "approve": approve, "steps": steps, "never_in_records": never}
+                "approve": approve, "steps": steps, "never_in_records": never + [nonce]}
 
     otp = {"args": {"selector": "#otp", "text": "{{OTP_1}}"}}
     a1 = {"selector": "#otp", "text": "{{OTP_1}}"}
@@ -465,8 +486,17 @@ def release_vectors():
             {"args": a1, "sink": type_acme},
         ]),
     ]
+    cases += [
+        case("arguments with no canonical form are refused, recorded, and cost no use", "browse_and_fill", mail, acme, None, [
+            {"args_json": '{"t": "{{OTP_1}}", "x": "\\ud800"}', "sink": type_acme},
+            {"args": a1, "sink": type_acme},
+        ]),
+        case("numbers in the arguments are written the way JavaScript writes them", "browse_and_fill", mail, acme, None, [
+            {"args_json": '{"n": 12345678901234567890, "f": 1.5, "big": 1e21, "text": "{{OTP_1}}"}', "sink": type_acme},
+        ]),
+    ]
     sh = shop["site"]
-    shown = digest(canonical({"description": "a Visa card ending 4242", "handle": "{{CARD_1}}",
+    shown = digest(canonical({"nonce": nonce, "description": "a Visa card ending 4242", "handle": "{{CARD_1}}",
                               "site": "shop.example", "tool": "type"}))
     wrong_site = lambda seq, prev, **kw: rec(seq, prev, handle="{{OTP_1}}", data="OTP", source="acme.com",  # noqa: E731
                                               sink={"tool": "type", "site": "evil.example"}, call=call(a1),
@@ -516,6 +546,19 @@ def release_vectors():
         ([{"refused": "release not recorded", "code": "not_recorded"}, {"args": {"selector": "#otp", "text": "482913"}}],
          [allow_otp(1, None)]),
     ]
+    big = {"n": 12345678901234567890, "f": 1.5, "big": 1e21, "text": "482913"}
+    # RFC 8785 by hand: keys in order, 1e21 as 1e+21, an integer past 2^53 as the nearest double
+    call_big = digest(b'{"big":1e+21,"f":1.5,"n":12345678901234567000,"text":"{{OTP_1}}"}')
+    expect += [
+        ([{"refused": "malformed arguments", "code": "malformed"}, {"args": {"selector": "#otp", "text": "482913"}}],
+         [rec(1, "none", handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
+              call=digest(b"malformed"), outcome="refused", decision="deny", code="malformed",
+              reason="malformed arguments", authority={"kind": "binding"}, uses_left=1),
+          allow_otp(2, "$1")]),
+        ([{"args": big}],
+         [rec(1, None, handle="{{OTP_1}}", data="OTP", source="acme.com", sink={"tool": "type", "site": "acme.com"},
+              call=call_big, outcome="released", decision="allow", authority={"kind": "binding"}, uses_left=0)]),
+    ]
     assert len(expect) == len(cases)
     for c, (results, records) in zip(cases, expect):
         # "$n" stands for the digest of record n's token, which only exists once the records are signed
@@ -524,6 +567,8 @@ def release_vectors():
         fixed = []
         for r in records:
             r = dict(r)
+            if r["prev"] == "none":
+                r["prev"] = None
             if isinstance(r["prev"], str) and r["prev"].startswith("$"):
                 r["prev"] = digest(got["tokens"][int(r["prev"][1:]) - 1].encode("ascii"))
             fixed.append(r)
@@ -559,6 +604,14 @@ def release_vectors():
         {"name": "a deny without a reason", "entry": deny, "delete": ["reason"], "problems": bad("reason")},
         {"name": "a sink with no site field", "entry": entry, "set": {"sink": {"tool": "type"}},
          "problems": bad("sink")},
+        {"name": "a shown that the vault does not recompute", "entry": entry,
+         "set": {"authority": {"kind": "person", "shown": digest(b"what they saw")}},
+         "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
+         "problems": ["release 1: shown does not match what the vault says the approver was given"]},
+        {"name": "a shown for a handle the vault does not hold", "entry": dict(entry, handle="{{OTP_7}}"),
+         "set": {"authority": {"kind": "person", "shown": digest(b"what they saw")}},
+         "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
+         "problems": ["release 1: shown names a handle the vault does not hold"]},
         {"name": "a real value hidden in a record", "entry": entry, "set": {"authority": {"kind": "person", "by": "code 482913"}},
          "profile": "browse_and_fill", "seed": zero, "now": NOW, "mask": mail,
          "problems": ["release 1: 1 known value(s) found in the record"]},
@@ -601,7 +654,9 @@ def checkpoint_vectors():
         {"name": "6 records cut to 4, no anchor", "keep": 4, "anchors": [],
          "expect": ex(4, [], None, "prefix", "no_anchor")},
         {"name": "6 records cut to 4, anchor at 6", "keep": 4, "anchors": [{"seq": 6}],
-         "expect": ex(4, [cut4], None, "prefix", "no_anchor")},
+         "expect": ex(4, [cut4], None, "prefix", "cut_off")},
+        {"name": "6 records cut to 4, anchors at 4 and 6: the one past the end wins", "keep": 4,
+         "anchors": [{"seq": 4}, {"seq": 6}], "expect": ex(4, [cut4], 4, "prefix", "cut_off")},
         {"name": "6 records cut to 4, anchor at 3", "keep": 4, "anchors": [{"seq": 3}],
          "expect": ex(4, [], 3, "prefix", "unanchored_tail")},
         {"name": "6 records cut to 4, anchors at 3 and 4", "keep": 4, "anchors": [{"seq": 3}, {"seq": 4}],

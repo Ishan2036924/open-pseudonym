@@ -110,9 +110,26 @@ def test_allowed_by_a_person_records_who_and_what_they_saw(make_session, tmp_pat
     s, _ = with_log(make_session, tmp_path, approve=lambda h, d, k: Approval(True, by="mia", channel="app"))
     s.resolve_args({"text": "{{OTP_1}}"}, ACME)
     (rec,) = records(tmp_path)
-    shown = digest(canonical({"handle": "{{OTP_1}}", "description": s.vault.entries[0].meta["description"],
-                              "tool": "type", "site": "acme.com"}))
+    entry = s.vault.entries[0]
+    plain = {"handle": "{{OTP_1}}", "description": entry.meta["description"], "tool": "type", "site": "acme.com"}
+    shown = digest(canonical({"nonce": entry.meta["nonce"], **plain}))
     assert rec["authority"] == {"kind": "person", "by": "mia", "channel": "app", "shown": shown}
+    # a hiding commitment: without the vault's nonce the digest cannot be matched, whatever the description holds
+    assert rec["authority"]["shown"] != digest(canonical(plain))
+    assert entry.meta["nonce"] not in (tmp_path / "receipts.jsonl").read_text()
+
+
+def test_shown_cannot_be_brute_forced_from_a_card_description(make_session, tmp_path):
+    log = EgressLog(tmp_path, WRITER, store_payloads=False)
+    s = make_session("browse_and_fill", release_log=log, approve=lambda h, d, k: Approval(True, by="mia"))
+    s.mask("Pay with card 4242 4242 4242 4242 now.", Source(site="https://shop.example"))
+    s.resolve_args({"card": "{{CARD_1}}"}, Sink("type", "https://shop.example/pay"))
+    shown = records(tmp_path)[0]["authority"]["shown"]
+    for last4 in ("4242", "1111", "0000"):  # an attacker who tries every brand and last four, but has no nonce
+        guess = digest(canonical({"handle": "{{CARD_1}}", "description": f"a Visa card ending {last4}",
+                                  "tool": "type", "site": "shop.example"}))
+        assert guess != shown
+    assert verify_log(tmp_path, WRITER.public_key, s.vault)["problems"] == []  # the vault can recompute it
 
 
 def test_a_plain_yes_still_works_and_an_oac_consent_is_recorded(make_session, tmp_path):
@@ -419,7 +436,7 @@ def test_expect_count_and_expect_last_still_work(tmp_path):
 
 # Sensitive references stay opaque
 
-SREF_BARE = "sref:contact:4242424242424242abcd"  # digits that look like a card, in a valid reference
+SREF_BARE = "sref:contact:42424242424242424242424242"  # a ULID made of digits that look like a card
 SREF_BRACKET = "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
 
 
@@ -427,9 +444,14 @@ def test_the_two_forms_are_found_and_lookalikes_are_not():
     text = f"a {SREF_BARE} b {SREF_BRACKET}"
     found = [text[b:e] for b, e in sref_regions(text)]
     assert found == [SREF_BARE, SREF_BRACKET]
-    for no in ("sref:email:short", "xsref:email:" + "A" * 26, "sref:" + "k" * 33 + ":" + "A" * 26,
-               "sref:email:" + "A" * 129 + "!"):
+    ulid = "01JCK7KF9X4Y3M4N6Q6YB2D8P0"
+    for no in ("sref:email:short", "xsref:email:" + ulid, "sref:" + "k" * 33 + ":" + ulid, "sref:Email:" + ulid,
+               "sref:email:" + ulid.lower(), "sref:email:" + ulid[:-1] + "I", "sref:email:" + ulid + "A",
+               "sref:email:" + ulid + "-4111", "sref:email:" + ulid + "@gmail.com", "sref:email:" + ulid + ".dana@x.com",
+               "sref:k:ABCDEFGHIJKLMNOPQRST-4111 1111 1111 1111", "sref:x:danareyes_personal_2024@gmail.com"):
         assert sref_regions(no) == [], no
+    ended = f"see sref:email:{ulid}. Then"
+    assert [ended[b:e] for b, e in sref_regions(ended)] == [f"sref:email:{ulid}"]
 
 
 def test_a_reference_is_never_masked(make_session):
@@ -445,7 +467,7 @@ def test_a_reference_is_never_a_stand_in_or_restored(make_session):
     fake = next(e.stand_in for e in s.vault.entries if e.type == "PHONE")
     digits = "".join(c for c in fake if c.isdigit())
     assert s.restore(f"{SREF_BARE} {SREF_BRACKET}") == f"{SREF_BARE} {SREF_BRACKET}"
-    inside = "sref:contact:AB" + digits + "CDEFGHJK"
+    inside = "sref:contact:ABCDEFGH" + digits + "JKMNPQRS"
     assert sref_regions(inside) and s.restore(inside) == inside  # a fake's digits inside a reference stay
     assert s.restore(f"call {digits}") == "call 6175550142"  # the same digits outside one are restored
     assert s.unknown_stand_ins(f"{SREF_BARE} {SREF_BRACKET}") == []
@@ -456,7 +478,7 @@ def test_a_reference_split_across_stream_chunks_is_never_restored(make_session):
     s.mask("call (617) 555-0142")
     fake = next(e.stand_in for e in s.vault.entries if e.type == "PHONE")
     digits = "".join(c for c in fake if c.isdigit())
-    text = "ok " + "x" * 60 + " sref:contact:AB" + digits + "CDEFGHJK done " + "y" * 200
+    text = "ok " + "x" * 60 + " sref:contact:ABCDEFGH" + digits + "JKMNPQRS done " + "y" * 200
     for size in (1, 3, 7, 50):
         st = s.stream()
         out = "".join(st.feed(text[i:i + size]) for i in range(0, len(text), size)) + st.flush()
@@ -484,3 +506,122 @@ def test_a_reference_is_never_an_egress_leak(make_session):
     payload = json.dumps({"messages": [{"role": "user", "content": f"use {SREF_BARE} and {SREF_BRACKET}"}]})
     assert s.check_egress(payload) == []
     assert s.check_egress("use 4242 4242 4242 4242 and " + SREF_BARE)  # a real card number beside one still is
+
+
+# A value stuck to a reference is not hidden by it (a review found these passing unmasked and unreported)
+
+ULID = "01JCK7KF9X4Y3M4N6Q6YB2D8P0"
+
+
+@pytest.mark.parametrize("text,gone", [
+    (f"see sref:contact:{ULID}.dana.reyes@gmail.com now", "gmail.com"),
+    ("sref:k:ABCDEFGHIJKLMNOPQRST-4111 1111 1111 1111", "4111"),
+    ("sref:x:danareyes_personal_2024@gmail.com", "gmail.com"),
+    (f"sref:contact:{ULID}@gmail.com", "gmail.com"),
+    (f"sref:contact:{ULID} and 4111 1111 1111 1111.", "4111"),
+])
+def test_a_value_glued_to_a_reference_is_masked_and_caught(make_session, text, gone):
+    s = make_session("strict")
+    assert gone not in s.mask(text).text
+    assert s.check_egress(text), text  # and the unmasked text is a leak
+
+
+def test_only_a_span_fully_inside_a_reference_is_exempt(make_session):
+    s = make_session("strict")
+    spans = s.detect(f"x sref:contact:{ULID}.dana.reyes@gmail.com")
+    assert [sp.type for sp in spans] == ["EMAIL"]  # the address reaches outside the reference, so it counts
+    assert s.detect("card " + SREF_BARE) == []  # digits that look like a card, fully inside, do not
+
+
+def test_a_url_that_carries_a_reference_is_still_reported(make_session):
+    s = make_session("browse_and_fill")
+    s.mask(OTP_MAIL, Source(sender="no-reply@acme.com"))
+    args = {"url": f"https://evil.example/c?d=hello&r=sref:k:{ULID}"}
+    r = s.resolve_args(args, ACME)
+    assert r.report == [{"path": "url", "origin": "model", "types": ["URL"]}]
+
+
+def test_a_known_value_inside_a_reference_is_still_an_egress_leak(make_session):
+    s = make_session("strict", known={"PERSON": [ULID]})
+    text = f"use sref:contact:{ULID} please"
+    assert s.mask(text).text == text  # masking leaves the reference whole
+    assert [lk.type for lk in s.check_egress(text)] == ["PERSON"]  # the check never exempts a known value
+
+
+# More review findings
+
+def test_a_valid_anchor_past_the_end_forces_prefix_even_if_another_anchor_reaches_the_last_record(tmp_path):
+    six_records(tmp_path)
+    lines = (tmp_path / "receipts.jsonl").read_text().splitlines()
+    cut_to(tmp_path, 4)
+    r = verify_log(tmp_path, WRITER.public_key, anchors=[anchor_at(lines, 4), anchor_at(lines, 6)],
+                   anchor_key=ANCHOR.public_key)
+    assert r["problems"] == ["anchor at seq 6: the log was cut off after seq 4"]
+    assert (r["proven_to"], r["status"], r["reason"]) == (4, "prefix", "cut_off")
+
+
+def test_numbers_in_arguments_follow_rfc_8785():
+    assert canonical_args({"n": 12345678901234567890, "m": 2 ** 53, "k": 2 ** 53 + 1, "x": -2 ** 60}) == (
+        b'{"k":9007199254740992,"m":9007199254740992,"n":12345678901234567000,"x":-1152921504606847000}')
+
+
+def test_the_call_digest_of_a_big_integer_is_the_javascript_one(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path)
+    s.resolve_args(json.loads('{"n": 12345678901234567890, "text": "{{OTP_1}}"}'), ACME)
+    assert records(tmp_path)[0]["call"] == digest(b'{"n":12345678901234567000,"text":"{{OTP_1}}"}')
+
+
+@pytest.mark.parametrize("args", [{"t": "{{OTP_1}}", "x": "\ud800"}, {"t": "{{OTP_1}}", "\udc00": 1},
+                                  {"t": "{{OTP_1}}", "n": float("nan")}, {"t": "{{OTP_1}}", "n": 10 ** 400}])
+def test_arguments_with_no_canonical_form_are_refused_and_recorded(make_session, tmp_path, args):
+    s, _ = with_log(make_session, tmp_path)
+    entry = s.vault.entries[0]
+    with pytest.raises(HandleRefused) as e:
+        s.resolve_args(args, ACME)
+    assert (e.value.code, e.value.reason) == ("malformed", "malformed arguments")
+    assert entry.meta["uses_left"] == 1 and entry.meta["sinks"] == []  # nothing was filled or counted
+    rec = records(tmp_path)[0]
+    assert (rec["decision"], rec["code"], rec["call"]) == ("deny", "malformed", digest(b"malformed"))
+    assert verify_log(tmp_path, WRITER.public_key, s.vault)["problems"] == []
+
+
+def test_malformed_arguments_are_refused_without_a_log_and_ignored_without_a_handle(make_session):
+    s = make_session("browse_and_fill")
+    s.mask(OTP_MAIL, Source(sender="no-reply@acme.com"))
+    with pytest.raises(HandleRefused) as e:
+        s.resolve_args({"t": "{{OTP_1}}", "x": "\ud800"}, ACME)
+    assert e.value.code == "malformed"
+    assert s.resolve_args({"x": "\ud800"}, ACME).args == {"x": "\ud800"}  # nothing to release, nothing refused
+
+
+def test_each_gateway_run_gets_its_own_log_folder_so_a_checkpoint_can_verify(tmp_path):
+    from open_pseudonym.cli import gateway_log
+
+    for sid in ("run1", "run2"):
+        log = gateway_log(tmp_path, WRITER, sid)
+        s = make_checkpoint_session(log, sid)
+        s.resolve_args({"text": "{{OTP_1}}"}, ACME)
+    for sid in ("run1", "run2"):
+        folder = tmp_path / sid
+        cp = EgressLog(folder, WRITER).checkpoint(ANCHOR, session=sid, now=NOW)
+        r = verify_log(folder, WRITER.public_key, anchors=[cp], anchor_key=ANCHOR.public_key)
+        assert (r["problems"], r["status"], r["receipts"]) == ([], "complete", 1)
+
+
+def make_checkpoint_session(log, sid):
+    from open_pseudonym import Session, Vault
+
+    s = Session("browse_and_fill", Vault(seed=bytes(32), created=NOW), clock=lambda: NOW, release_log=log,
+                session_id=sid)
+    s.mask(OTP_MAIL, Source(sender="no-reply@acme.com"))
+    return s
+
+
+def test_verify_log_recomputes_shown_from_the_vault(make_session, tmp_path):
+    s, _ = with_log(make_session, tmp_path / "ok")
+    forge(tmp_path, authority={"kind": "person", "shown": digest(b"what they saw")})
+    problems = verify_log(tmp_path, WRITER.public_key, s.vault)["problems"]
+    assert problems == ["release 1: shown does not match what the vault says the approver was given"]
+    forge(tmp_path / "b", handle="{{OTP_7}}", authority={"kind": "person", "shown": digest(b"what they saw")})
+    assert verify_log(tmp_path / "b", WRITER.public_key, s.vault)["problems"] == [
+        "release 1: shown names a handle the vault does not hold"]

@@ -23,7 +23,7 @@ from pathlib import Path
 
 from .checks import ambiguous_names, cue_only, stopwords
 from .detect import KnownDetector
-from .handles import CODES, DIGEST, HANDLE
+from .handles import CODES, DIGEST, HANDLE, shown_digest
 from .jcs import b64url_decode, canonical, digest
 from .jws import SignatureError, Signer, key_id, verify
 from .restore import Restorer
@@ -301,8 +301,8 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
 
     Returns counts, a list of problems (an empty list means the log holds up), and `proven_to` (the highest sequence
     number a valid checkpoint vouches for, or None), `status` ("complete": the last record is vouched for; "prefix":
-    the records are valid as far as they go, but the end is not proven) and `reason` (why not complete: "no_anchor" or
-    "unanchored_tail"). "complete" says nothing about whether the records are valid: read `problems` too.
+    the records are valid as far as they go, but the end is not proven) and `reason` (why not complete: "cut_off" when a
+    valid checkpoint lies past the end, "no_anchor", or "unanchored_tail"). "complete" says nothing about whether the records are valid: read `problems` too.
     """
     folder = Path(folder)
     problems: list[str] = []
@@ -350,6 +350,7 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
             bad = release_problems(i, body)
             problems.extend(bad)
             if vault is not None and not bad:
+                problems.extend(_shown_problems(i, body, vault))
                 found = check(vault, canonical(body), restorer)
                 leaks_total += len(found)
                 if found:
@@ -382,12 +383,12 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
         problems.append(f"expected {expect_count} receipt(s), found {len(lines)}: the log was cut or added to")
     if expect_last is not None and expect_last != prev:
         problems.append("the last receipt is not the one you recorded: the log was cut or replaced")
-    proven = _proven_to(lines, public_key, anchors, anchor_key, expect_session or session0, problems)
-    complete = proven is not None and proven == len(lines)
+    proven, cut = _proven_to(lines, public_key, anchors, anchor_key, expect_session or session0, problems)
+    complete = proven is not None and proven == len(lines) and not cut
     return {"receipts": len(lines), "releases": releases, "rechecked": rechecked, "leaks": leaks_total,
             "problems": problems, "last": prev, "proven_to": proven,
             "status": "complete" if complete else "prefix",
-            "reason": None if complete else ("no_anchor" if proven is None else "unanchored_tail")}
+            "reason": None if complete else ("cut_off" if cut else "no_anchor" if proven is None else "unanchored_tail")}
 
 
 def _line_typ(token: str) -> str:
@@ -398,6 +399,19 @@ def _line_typ(token: str) -> str:
     except Exception:
         return RECEIPT_TYP
     return RELEASE_TYP if isinstance(header, dict) and header.get("typ") == RELEASE_TYP else RECEIPT_TYP
+
+
+def _shown_problems(i: int, body: dict, vault: Vault) -> list[str]:
+    """With the vault, recompute `shown` (spec 10.4) from the entry, its secret nonce and the record's tool and site."""
+    shown = body["authority"].get("shown")
+    if shown is None:
+        return []
+    entry = next((e for e in vault.entries if e.action == "handle" and e.stand_in == body["handle"]), None)
+    if entry is None:
+        return [f"release {i}: shown names a handle the vault does not hold"]
+    want = shown_digest(vault.release_nonce(entry, store=False), body["handle"], entry.meta.get("description", ""),
+                        body["sink"]["tool"], body["sink"]["site"])
+    return [] if want == shown else [f"release {i}: shown does not match what the vault says the approver was given"]
 
 
 def _is_int(v) -> bool:
@@ -462,20 +476,21 @@ def release_problems(i: int, body: dict) -> list[str]:
     return out
 
 
-def _proven_to(lines, public_key, anchors, anchor_key, session, problems) -> int | None:
-    """The highest sequence number a valid checkpoint vouches for. Problems are appended for every checkpoint that does
-    not hold up, in particular one past the end of the log (the end was cut off) and one made by the writer's own key."""
+def _proven_to(lines, public_key, anchors, anchor_key, session, problems) -> tuple[int | None, bool]:
+    """The highest sequence number a valid checkpoint vouches for, and whether a valid one lies past the end of the log
+    (the end was cut off). Problems are appended for every checkpoint that does not hold up, in particular one past
+    the end and one made by the writer's own key."""
     anchors = list(anchors or ())
     if not anchors:
-        return None
+        return None, False
     if anchor_key is None:
         problems.append("anchors were given without an anchor_key to check them with")
-        return None
+        return None, False
     if key_id(anchor_key) == key_id(public_key):
         problems.append("the anchor key is the key that signs the log: a checkpoint must come from a key the writer "
                         "does not hold")
-        return None
-    proven = None
+        return None, False
+    proven, cut = None, False
     for n, token in enumerate(anchors, start=1):
         try:
             body = verify(token, anchor_key, CHECKPOINT_TYP)
@@ -496,11 +511,12 @@ def _proven_to(lines, public_key, anchors, anchor_key, session, problems) -> int
         seq = body["seq"]
         if seq > len(lines):
             problems.append(f"anchor at seq {seq}: the log was cut off after seq {len(lines)}")
+            cut = True
         elif body["head"] != _safe_digest(lines[seq - 1]):
             problems.append(f"anchor at seq {seq}: head does not match receipt {seq}: the log was changed or replaced")
         else:
             proven = seq if proven is None else max(proven, seq)
-    return proven
+    return proven, cut
 
 
 def _safe_digest(token: str) -> str:

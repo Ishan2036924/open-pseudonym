@@ -51,7 +51,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -174,7 +175,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -242,7 +244,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -273,12 +276,12 @@
       "kind": "person",
       "by": "mia",
       "channel": "app",
-      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+      "shown": "sha-256:m9V0rDFJLImiqzEXqoudI_DEviYPTBJkjJkgMlaWmWU"
      }
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJjaGFubmVsIjoiYXBwIiwia2luZCI6InBlcnNvbiIsInNob3duIjoic2hhLTI1Njo1V0tKcFBEcXN1R25Pa1ZKYms5MzhmQzNzRjRFMGtKcU91bHpEV0otRUp3In0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.WdPaRbfef_K9IyxgRgCWBW4L-kIgrP8IrIBjqEQp8H8UanRnPPZ2RcNAgx1xaiXZ1ERRJsEgoEktcHfA-uH0DQ"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJjaGFubmVsIjoiYXBwIiwia2luZCI6InBlcnNvbiIsInNob3duIjoic2hhLTI1NjptOVYwckRGSkxJbWlxekVYcW91ZElfREV2aVlQVEJKa2pKa2dNbGFXbVdVIn0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.SfMb-ytqh1d2i6HSXkVHD2F0LNoX0wvsG3GUpyBAqPLO4UdcggPcx0XJD2tK2euVUmXDs9G21WRjEgw0kXBADg"
    ]
   },
   {
@@ -312,7 +315,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -343,12 +347,12 @@
       "kind": "consent",
       "ref": "jti-7f3a",
       "digest": "sha-256:IMiKVmV_MR_4rgUosxGKee7lbrhCs4OuIPVxgC32lzo",
-      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+      "shown": "sha-256:m9V0rDFJLImiqzEXqoudI_DEviYPTBJkjJkgMlaWmWU"
      }
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiZGlnZXN0Ijoic2hhLTI1NjpJTWlLVm1WX01SXzRyZ1Vvc3hHS2VlN2xicmhDczRPdUlQVnhnQzMybHpvIiwia2luZCI6ImNvbnNlbnQiLCJyZWYiOiJqdGktN2YzYSIsInNob3duIjoic2hhLTI1Njo1V0tKcFBEcXN1R25Pa1ZKYms5MzhmQzNzRjRFMGtKcU91bHpEV0otRUp3In0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.Pup_2LCYW_LVVagY74yx08XH_apIC5iwUWAlmFkwoTgkEeatuoEynIWyvBQb1igdrposAEqQViePEkqbxwgGDA"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiZGlnZXN0Ijoic2hhLTI1NjpJTWlLVm1WX01SXzRyZ1Vvc3hHS2VlN2xicmhDczRPdUlQVnhnQzMybHpvIiwia2luZCI6ImNvbnNlbnQiLCJyZWYiOiJqdGktN2YzYSIsInNob3duIjoic2hhLTI1NjptOVYwckRGSkxJbWlxekVYcW91ZElfREV2aVlQVEJKa2pKa2dNbGFXbVdVIn0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.OFwQ01BfaucsY9z5pY8nuNcLP-Ol9vDlFQwynlNo0ao3n1BZIB33DF_5tACXNmz_kEELEi9xmDXx6vwz5lFZAA"
    ]
   },
   {
@@ -381,7 +385,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -412,12 +417,12 @@
      "authority": {
       "kind": "person",
       "by": "mia",
-      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+      "shown": "sha-256:m9V0rDFJLImiqzEXqoudI_DEviYPTBJkjJkgMlaWmWU"
      }
     }
    ],
    "tokens": [
-    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJraW5kIjoicGVyc29uIiwic2hvd24iOiJzaGEtMjU2OjVXS0pwUERxc3VHbk9rVkpiazkzOGZDM3NGNEUwa0pxT3VsekRXSi1FSncifSwiY2FsbCI6InNoYS0yNTY6b2VTRmJxc2x2X3h0VmFzZ3BlMkJVZmpWc3dyMDVBdnZnNEVhSUgzaC1aQSIsImNvZGUiOiJub3RfYXBwcm92ZWQiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7Q0FSRF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWZ1c2VkIiwicHJldiI6bnVsbCwicmVhc29uIjoibm90IGFwcHJvdmVkIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJzaG9wLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJzaG9wLmV4YW1wbGUiLCJ0eXBlIjoicmVsZWFzZSJ9.EaFxI_PMQzs_6XacbmyjwB_HYGO0JKTYxcj7-08ssN3SQY4kTEDYR-ZXQcPW7C8o9r_pRhheTNJeztr15irVBQ"
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJraW5kIjoicGVyc29uIiwic2hvd24iOiJzaGEtMjU2Om05VjByREZKTEltaXF6RVhxb3VkSV9ERXZpWVBUQkprakprZ01sYVdtV1UifSwiY2FsbCI6InNoYS0yNTY6b2VTRmJxc2x2X3h0VmFzZ3BlMkJVZmpWc3dyMDVBdnZnNEVhSUgzaC1aQSIsImNvZGUiOiJub3RfYXBwcm92ZWQiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7Q0FSRF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWZ1c2VkIiwicHJldiI6bnVsbCwicmVhc29uIjoibm90IGFwcHJvdmVkIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJzaG9wLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJzaG9wLmV4YW1wbGUiLCJ0eXBlIjoicmVsZWFzZSJ9.3Vus6XR-1QO0yUpk6nuSOQOwN5kyXFPA45e-25hK4PRqvyhXfjvMXTzQL5ntZsgeg-QZzi7qMv-ekaVSb-94AA"
    ]
   },
   {
@@ -447,7 +452,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -513,7 +519,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -577,7 +584,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -659,7 +667,8 @@
     "482913",
     "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
     "4242424242424242",
-    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
    ],
    "results": [
     {
@@ -699,6 +708,175 @@
    ],
    "tokens": [
     "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.XfHJtYH6p2Y_72tNBvU4GgQ1RvFRfT4ST_AkoJWMyp1gDMEyr34GiuCfcF09jRWd9LBAyusMwQH1HBlxJ1CEDw"
+   ]
+  },
+  {
+   "name": "arguments with no canonical form are refused, recorded, and cost no use",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args_json": "{\"t\": \"{{OTP_1}}\", \"x\": \"\\ud800\"}",
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
+   ],
+   "results": [
+    {
+     "refused": "malformed arguments",
+     "code": "malformed"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "482913"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:YOybtymdheDN011AWPq9fLa9ybeIxu_eREJ-m7kjThM",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "malformed",
+     "reason": "malformed arguments",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 1
+    },
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 2,
+     "prev": "sha-256:LSM0S23uVouQkNCgNEroWasD8nTGvm0T61rmREshuk0",
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 0
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6WU95YnR5bWRoZUROMDExQVdQcTlmTGE5eWJlSXh1X2VSRUotbTdralRoTSIsImNvZGUiOiJtYWxmb3JtZWQiLCJkYXRhIjoiT1RQIiwiZGVjaXNpb24iOiJkZW55IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im1hbGZvcm1lZCBhcmd1bWVudHMiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MX0.ES_0Y0l1Eb2320-jyaYSbw4fG6r7sZNcYJrvhZDwicHUHi91bqTIcxWLVvWMuK8Rf8piDtgBs5hTSCJ4LCuADQ",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpMU00wUzIzdVZvdVFrTkNnTkVyb1dhc0Q4blRHdm0wVDYxcm1SRXNodWswIiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.uu8Gly88bo3LhMKZIlEY7IbRzryaKbr4-VPMG3cjjq3WWGmsW1dk9S41nfYQ-T3V70HIwP0VCeJ7L61dLjfbCw"
+   ]
+  },
+  {
+   "name": "numbers in the arguments are written the way JavaScript writes them",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args_json": "{\"n\": 12345678901234567890, \"f\": 1.5, \"big\": 1e21, \"text\": \"{{OTP_1}}\"}",
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU",
+    "JPwoZGVUVdh--RDhdnHGgg8uiXCKQkhv8klMvX8U9KI"
+   ],
+   "results": [
+    {
+     "args": {
+      "n": 12345678901234567890,
+      "f": 1.5,
+      "big": 1e+21,
+      "text": "482913"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:RZ_ednmLDk6NMYwRKSPqG-5Mct3S4YrhtwJqFMqRxYo",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 0
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6UlpfZWRubUxEazZOTVl3UktTUHFHLTVNY3QzUzRZcmh0d0pxRk1xUnhZbyIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.OGFd7HGeUYlOaoM8vpN_W7k5UY-RH-9HDIW_c4pP7lXLR9ufp6fVT8363CWpVAWA6-6TVhH5h9ahYRKm92pEAg"
    ]
   }
  ],
@@ -1026,6 +1204,70 @@
    },
    "problems": [
     "release 1: sink is not valid"
+   ]
+  },
+  {
+   "name": "a shown that the vault does not recompute",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "person",
+     "shown": "sha-256:eIqwUxB-IULQWuXfmjmdr6YvUoeE7jbtqpDuenXbH4Q"
+    }
+   },
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": "Your Acme verification code is 482913. It expires in 10 minutes.",
+   "problems": [
+    "release 1: shown does not match what the vault says the approver was given"
+   ]
+  },
+  {
+   "name": "a shown for a handle the vault does not hold",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_7}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "person",
+     "shown": "sha-256:eIqwUxB-IULQWuXfmjmdr6YvUoeE7jbtqpDuenXbH4Q"
+    }
+   },
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": "Your Acme verification code is 482913. It expires in 10 minutes.",
+   "problems": [
+    "release 1: shown names a handle the vault does not hold"
    ]
   },
   {

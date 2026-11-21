@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 
 from . import __version__
@@ -194,6 +195,12 @@ def cmd_proxy(args) -> int:
     return 0
 
 
+def gateway_log(log_dir, signer: Signer, session_id: str) -> EgressLog:
+    """One log folder is one session: a run of the gateway starts a new session, so it gets its own folder,
+    `<log-dir>/<session-id>/`. Joining runs into one chain would leave a checkpoint of the folder unable to verify."""
+    return EgressLog(Path(log_dir) / session_id, signer, store_payloads=False)
+
+
 def cmd_mcp_gateway(args) -> int:
     import anyio
 
@@ -209,8 +216,9 @@ def cmd_mcp_gateway(args) -> int:
     if args.vault:
         key = load_vault_key(args)
         vault = Vault.load(args.vault, key) if Path(args.vault).exists() else Vault()
-    log = EgressLog(args.log_dir, load_signer(args), store_payloads=False) if args.log_dir else None
-    s = Session(args.profile, vault, release_log=log)
+    sid = uuid.uuid4().hex
+    log = gateway_log(args.log_dir, load_signer(args), sid) if args.log_dir else None
+    s = Session(args.profile, vault, release_log=log, session_id=sid)
     params = StdioServerParameters(command=args.command[0], args=args.command[1:])
     tool_sites = dict(item.split("=", 1) for item in args.tool_site)
     source = Source(site=args.source_site) if args.source_site else None
@@ -318,7 +326,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--tool-site", action="append", default=[], metavar="TOOL=SITE",
                    help="this tool acts on SITE, so handles bound to SITE may be filled into it")
     g.add_argument("--vault", help="keep the vault in this file between runs")
-    g.add_argument("--log-dir", help="write a signed release record here for every handle filled or refused")
+    g.add_argument("--log-dir", help="write a signed release record for every handle filled or refused, one folder "
+                   "per run: <log-dir>/<session-id>/ (a log folder holds one session)")
     g.add_argument("--key-file")
     g.add_argument("command", nargs=argparse.REMAINDER)
     g.set_defaults(fn=cmd_mcp_gateway)

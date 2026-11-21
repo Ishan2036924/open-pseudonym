@@ -33,7 +33,14 @@ export function canonicalArgs(value: unknown): Buffer {
   return Buffer.from(encodeLoose(value), "utf-8");
 }
 
+function wellFormed(s: string): string {
+  // a lone surrogate is not text: refuse it, as the Python SDK does (JSON.stringify would escape it instead)
+  if (!s.isWellFormed()) throw new TypeError("a lone surrogate is not text");
+  return s;
+}
+
 function encodeLoose(v: unknown): string {
+  if (typeof v === "string") return JSON.stringify(wellFormed(v));
   if (typeof v === "number") {
     if (!Number.isFinite(v)) throw new TypeError("NaN and infinity are not JSON");
     return Object.is(v, -0) ? "0" : String(v);
@@ -41,7 +48,7 @@ function encodeLoose(v: unknown): string {
   if (Array.isArray(v)) return "[" + v.map(encodeLoose).join(",") + "]";
   if (v !== null && typeof v === "object") {
     const obj = v as Record<string, unknown>;
-    return "{" + Object.keys(obj).sort().map((k) => JSON.stringify(k) + ":" + encodeLoose(obj[k])).join(",") + "}";
+    return "{" + Object.keys(obj).sort().map((k) => JSON.stringify(wellFormed(k)) + ":" + encodeLoose(obj[k])).join(",") + "}";
   }
   return encode(v);
 }

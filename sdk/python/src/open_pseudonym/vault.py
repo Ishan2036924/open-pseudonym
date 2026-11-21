@@ -142,6 +142,17 @@ class Vault:
     def get_fpe_key(self) -> bytes:
         return self.fpe_key if self.fpe_key is not None else self.drbg.derive("fpe")
 
+    def release_nonce(self, entry: Entry, store: bool = True) -> str:
+        """The secret nonce of a handle entry, drawn once and kept in the entry (so in the encrypted vault, never in a
+        log). It makes the `shown` commitment of a release record hiding: the description an approver is given holds a
+        card's last four digits, which a bare digest would give away to anyone who tries the 10,000 possibilities."""
+        n = entry.meta.get("nonce")
+        if n is None:
+            n = b64url(self.drbg.derive("release.nonce." + entry.id))
+            if store:
+                entry.meta["nonce"] = n
+        return n
+
     # Saving
 
     def to_dict(self) -> dict:
