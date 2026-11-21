@@ -27,8 +27,6 @@ from .vault import Vault
 NB = "(?<![A-Za-z0-9_])"
 NA = "(?![A-Za-z0-9_])"
 TAG = re.compile(r"\[([A-Z][A-Z0-9_]*)_([0-9]+)\]")
-# the tail of a text that could still grow into a sensitive reference (see handles.SREF)
-SREF_OPEN = re.compile(r"\u27e6?sref:(?:[A-Za-z0-9_-]{0,32}|[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{0,127})\Z")
 DIGIT_RUN = re.compile(r"(?<![0-9])\+?[0-9](?:[ .()-]{0,2}[0-9]){5,22}(?![0-9])")
 _DATE_REGEXES = None
 
@@ -222,10 +220,9 @@ class StreamRestorer:
         offset = len(self._prev)
         found = r.matches(context, offset, self._reveal)
         cut = len(self._buf) - hold
-        # hold back a sensitive reference that is still arriving, so a digit run inside it is never restored
-        for m in SREF_OPEN.finditer(self._buf):
-            cut = min(cut, m.start())
-        for b, e in sref_regions(context):  # and never cut one in half
+        # Never cut a sensitive reference in half: the tail we keep is longer than what comes before a reference's id (39
+        # characters), so by the time a digit run in the id leaves the tail, the reference is long enough to be seen.
+        for b, e in sref_regions(context):
             if b - offset < cut < e - offset:
                 cut = b - offset
         for m in found:

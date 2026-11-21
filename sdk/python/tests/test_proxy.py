@@ -351,3 +351,23 @@ async def test_signature_is_content_outside_reasoning_and_text_base64_is_masked(
     sent = json.loads(raw)["messages"][0]["content"][0]["source"]["data"]
     decoded = b64.b64decode(sent).decode()
     assert "Dana" not in decoded and "123-45-6789" not in decoded
+
+
+@pytest.mark.anyio
+async def test_a_handle_the_proxy_fills_is_recorded_in_the_same_log(tmp_path):
+    def answer(body):
+        calls = [{"id": "a", "type": "function", "function": {"name": "browser_type",
+                                                             "arguments": '{"text":"{{OTP_1}}"}'}}]
+        return httpx.Response(200, json={"choices": [{"index": 0, "message": {"role": "assistant",
+                                                                               "tool_calls": calls}}]})
+
+    client, signer = client_for(Upstream(answer), tmp_path, profile="browse_and_fill",
+                                fill_tools={"browser_type": "https://acme.com/login"})
+    async with client:
+        r = await client.post("/v1/chat/completions", headers={"x-opn-source-sender": "no-reply@acme.com"},
+                              json={"model": "m", "messages": [{"role": "user", "content": MAIL}]})
+    assert json.loads(r.json()["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]) == {"text": "482913"}
+    (folder,) = [p for p in tmp_path.iterdir() if p.is_dir()]
+    report = verify_log(folder, signer.public_key)
+    assert (report["receipts"], report["releases"], report["problems"]) == (2, 1, [])
+    assert "482913" not in (folder / "receipts.jsonl").read_text()

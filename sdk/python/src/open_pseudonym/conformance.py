@@ -126,6 +126,8 @@ class Runner:
                 return {"args": s.resolve_args(st["args"], Sink(**st["sink"])).args}
             except HandleRefused as exc:
                 return {"refused": exc.reason}
+        if op == "resolve_report":
+            return {"report": s.resolve_args(st["args"], Sink(**st["sink"])).report}
         if op == "egress":
             return sorted({lk.type for lk in s.check_egress(st["payload"])})
         if op == "mask_messages":

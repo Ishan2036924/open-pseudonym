@@ -288,6 +288,8 @@ function step(s: Session, st: any): unknown {
         if (exc instanceof HandleRefused) return { refused: exc.reason };
         throw exc;
       }
+    case "resolve_report":
+      return { report: s.resolveArgs(st.args, new Sink(st.sink)).report };
     case "egress":
       return [...new Set(s.checkEgress(st.payload).map((lk) => lk.type))].sort();
     case "mask_messages": {

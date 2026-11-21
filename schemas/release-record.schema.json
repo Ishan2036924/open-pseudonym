@@ -1,0 +1,221 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Ishan2036924/open-pseudonym/schemas/release-record.schema.json",
+ "title": "Open Pseudonym release record payload",
+ "description": "Spec section 10.4. Signed as a compact JWS, typ opn-release+jws, in the same log and chain as egress receipts. It holds no real value and no hash of one.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "opn",
+  "type",
+  "session",
+  "seq",
+  "prev",
+  "iat",
+  "handle",
+  "data",
+  "source",
+  "sink",
+  "call",
+  "outcome",
+  "decision",
+  "authority"
+ ],
+ "properties": {
+  "opn": {
+   "const": "0.1"
+  },
+  "type": {
+   "const": "release"
+  },
+  "session": {
+   "type": "string"
+  },
+  "seq": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "prev": {
+   "oneOf": [
+    {
+     "type": "null"
+    },
+    {
+     "type": "string",
+     "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    }
+   ]
+  },
+  "iat": {
+   "type": "integer"
+  },
+  "handle": {
+   "type": "string",
+   "pattern": "^\\{\\{[A-Z][A-Z0-9_]*_[0-9]+\\}\\}$"
+  },
+  "data": {
+   "oneOf": [
+    {
+     "type": "null"
+    },
+    {
+     "type": "string",
+     "pattern": "^[A-Z][A-Z0-9_]{1,31}$"
+    }
+   ]
+  },
+  "source": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "sink": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "tool",
+    "site"
+   ],
+   "properties": {
+    "tool": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "site": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  "call": {
+   "type": "string",
+   "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+  },
+  "outcome": {
+   "enum": [
+    "released",
+    "refused"
+   ]
+  },
+  "decision": {
+   "enum": [
+    "allow",
+    "deny"
+   ]
+  },
+  "code": {
+   "enum": [
+    "unknown_handle",
+    "unbound",
+    "expired",
+    "used_up",
+    "wrong_tool",
+    "wrong_site",
+    "needs_approval",
+    "not_approved"
+   ]
+  },
+  "reason": {
+   "type": "string",
+   "minLength": 1
+  },
+  "authority": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "kind"
+   ],
+   "properties": {
+    "kind": {
+     "enum": [
+      "binding",
+      "person",
+      "consent",
+      "policy"
+     ]
+    },
+    "ref": {
+     "type": "string",
+     "minLength": 1
+    },
+    "digest": {
+     "type": "string",
+     "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    },
+    "by": {
+     "type": "string",
+     "minLength": 1
+    },
+    "channel": {
+     "type": "string",
+     "minLength": 1
+    },
+    "shown": {
+     "type": "string",
+     "pattern": "^sha-256:[A-Za-z0-9_-]{43}$"
+    }
+   }
+  },
+  "uses_left": {
+   "type": "integer",
+   "minimum": 0
+  }
+ },
+ "allOf": [
+  {
+   "if": {
+    "properties": {
+     "decision": {
+      "const": "allow"
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "outcome": {
+      "const": "released"
+     }
+    },
+    "not": {
+     "anyOf": [
+      {
+       "required": [
+        "code"
+       ]
+      },
+      {
+       "required": [
+        "reason"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "decision": {
+      "const": "deny"
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "outcome": {
+      "const": "refused"
+     }
+    },
+    "required": [
+     "code",
+     "reason"
+    ]
+   }
+  }
+ ]
+}

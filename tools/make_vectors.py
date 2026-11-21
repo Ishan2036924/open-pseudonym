@@ -203,6 +203,8 @@ def run_steps(session, steps):
                 step["expect"] = {"args": r.args}
             except HandleRefused as exc:
                 step["expect"] = {"refused": exc.reason}
+        elif op == "resolve_report":
+            step["expect"] = {"report": session.resolve_args(step["args"], Sink(**step["sink"])).report}
         elif op == "egress":
             step["expect"] = sorted({lk.type for lk in session.check_egress(step["payload"])})
         elif op == "mask_messages":
@@ -325,9 +327,11 @@ def scenario_vectors():
         {"op": "restore", "text": "__MASKED__", "reveal": True},
         {"op": "restore", "text": f"Dial {fake_digits} and keep {inside} and {sref_ref}"},
         {"op": "stream", "text": f"Dial {fake_digits} and keep {inside} and {sref_ref} " + "z" * 60,
-         "chunks": [1, 2, 3, 5, 8, 13, 21, 34, 55]},
+         "chunks": [1] * 120},  # one character at a time, so every cut is tried
         {"op": "resolve", "args": {"ref": inside, "other": sref_ref}, "sink": {"tool": "type", "site": "https://acme.com"}},
         {"op": "resolve", "args": {"ref": "{{SREF_1}}"}, "sink": {"tool": "type", "site": "https://acme.com"}},
+        {"op": "resolve_report", "args": {"ref": sref_bare, "card": "4242 4242 4242 4242"},
+         "sink": {"tool": "type", "site": "https://acme.com"}},
         {"op": "egress", "payload": json.dumps({"input": f"use {inside} and {sref_ref}"})},
         {"op": "egress", "payload": json.dumps({"input": f"use {sref_bare} and 4242 4242 4242 4242"})},
     ])
@@ -366,7 +370,9 @@ def scenario_vectors():
     assert opaque[3]["expect"] == opaque[3]["text"].replace(fake_digits, "6175550142", 1)
     assert opaque[4]["expect"] == {"args": {"ref": inside, "other": sref_ref}}
     assert opaque[5]["expect"] == {"refused": "unknown handle"}
-    assert opaque[6]["expect"] == [] and opaque[7]["expect"] == ["CARD"]
+    # only the card number the model wrote itself is reported, never the reference with a card-like run in it
+    assert opaque[6]["expect"] == {"report": [{"path": "card", "origin": "model", "types": ["CARD"]}]}
+    assert opaque[7]["expect"] == [] and opaque[8]["expect"] == ["CARD"]
     whole = by["names are hidden whole"]
     assert "Dana" not in whole[0]["expect"]["text"] and "Zorblax" not in whole[0]["expect"]["text"]
     assert whole[1]["expect"] == whole[0]["text"] and whole[2]["expect"] == [] and "PERSON" in whole[3]["expect"]

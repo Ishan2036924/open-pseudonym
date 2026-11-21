@@ -16,13 +16,17 @@ Keys live in ~/.config/open-pseudonym unless you say otherwise. They are never p
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from . import __version__
+from .egress import EgressLog
 from .handles import Source
-from .jws import Signer, public_key_from_pem, public_pem
+from .jcs import b64url_decode
+from .jws import Signer, key_id, public_key_from_pem, public_pem
 from .policy import LEVELS, load_profile, profile_names
 from .session import Session
 from .vault import Vault
@@ -127,9 +131,13 @@ def cmd_verify(args) -> int:
     pub_path = Path(args.pub) if args.pub else key_dir(args) / "signing.pub.pem"
     pub = public_key_from_pem(pub_path.read_bytes())
     vault = Vault.load(args.vault, load_vault_key(args)) if args.vault else None
+    anchors = [Path(f).read_text().strip() for f in args.anchor]
+    anchor_key = public_key_from_pem(Path(args.anchor_pub).read_bytes()) if args.anchor_pub else None
     report = verify_log(args.logdir, pub, vault, expect_count=args.expect_count, expect_last=args.expect_last,
-                        expect_session=args.expect_session)
-    print(f"receipts: {report['receipts']} (last: {report['last']})")
+                        expect_session=args.expect_session, anchors=anchors, anchor_key=anchor_key)
+    print(f"receipts: {report['receipts']} (release records: {report['releases']}, last: {report['last']})")
+    if anchors:
+        print(f"checkpoints vouch for the log up to record {report['proven_to']}: {report['status']}")
     if vault is not None:
         print(f"payloads re-checked against the vault: {report['rechecked']}, known values found: {report['leaks']}")
     if report["problems"]:
@@ -138,8 +146,27 @@ def cmd_verify(args) -> int:
             print("  " + p)
         return 1
     print("every receipt is signed and chained, and every stored payload matches its digest")
-    if args.expect_count is None and args.expect_last is None:
-        print("note: without --expect-count or --expect-last a log cut short at the end cannot be told apart")
+    if args.expect_count is None and args.expect_last is None and not anchors:
+        print("note: without --expect-count, --expect-last or --anchor a log cut short at the end cannot be told apart")
+    return 0
+
+
+def cmd_checkpoint(args) -> int:
+    """Sign a checkpoint of a log that verifies, with the key in this key folder (not the log writer's)."""
+    from .egress import make_checkpoint, verify_log
+
+    writer_pub = public_key_from_pem(Path(args.pub).read_bytes())
+    report = verify_log(args.logdir, writer_pub)
+    if report["problems"] or not report["receipts"]:
+        for p in report["problems"] or ["the log holds no records"]:
+            print("  " + p, file=sys.stderr)
+        sys.exit("not signing a checkpoint of a log that does not verify")
+    anchor = load_signer(args)
+    if anchor.kid == key_id(writer_pub):
+        sys.exit("this key signs the log; a checkpoint must come from a key the log writer does not hold")
+    last = Path(args.logdir, "receipts.jsonl").read_text().splitlines()[-1]
+    session = json.loads(b64url_decode(last.split(".")[1]))["session"]
+    print(make_checkpoint(anchor, session=session, seq=report["receipts"], head=report["last"], now=int(time.time())))
     return 0
 
 
@@ -182,7 +209,8 @@ def cmd_mcp_gateway(args) -> int:
     if args.vault:
         key = load_vault_key(args)
         vault = Vault.load(args.vault, key) if Path(args.vault).exists() else Vault()
-    s = Session(args.profile, vault)
+    log = EgressLog(args.log_dir, load_signer(args), store_payloads=False) if args.log_dir else None
+    s = Session(args.profile, vault, release_log=log)
     params = StdioServerParameters(command=args.command[0], args=args.command[1:])
     tool_sites = dict(item.split("=", 1) for item in args.tool_site)
     source = Source(site=args.source_site) if args.source_site else None
@@ -260,7 +288,15 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--expect-count", type=int, help="the number of requests you know were sent")
     v.add_argument("--expect-last", help="the digest of the last receipt you kept (sha-256:...)")
     v.add_argument("--expect-session", help="the session id every receipt must belong to")
+    v.add_argument("--anchor", action="append", default=[], metavar="FILE",
+                   help="a file holding a checkpoint, made by a key the log writer does not hold")
+    v.add_argument("--anchor-pub", help="the public key PEM of whoever made the checkpoints")
     v.set_defaults(fn=cmd_verify)
+
+    k = sub.add_parser("checkpoint", help="sign a checkpoint of a log with this key folder's key (run it as the anchor)")
+    k.add_argument("logdir")
+    k.add_argument("--pub", required=True, help="the log writer's public key PEM")
+    k.set_defaults(fn=cmd_checkpoint)
 
     x = sub.add_parser("proxy", help="run the local proxy")
     x.add_argument("--profile", default="strict")
@@ -282,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--tool-site", action="append", default=[], metavar="TOOL=SITE",
                    help="this tool acts on SITE, so handles bound to SITE may be filled into it")
     g.add_argument("--vault", help="keep the vault in this file between runs")
+    g.add_argument("--log-dir", help="write a signed release record here for every handle filled or refused")
     g.add_argument("--key-file")
     g.add_argument("command", nargs=argparse.REMAINDER)
     g.set_defaults(fn=cmd_mcp_gateway)

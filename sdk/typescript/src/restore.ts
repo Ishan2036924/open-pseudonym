@@ -22,8 +22,6 @@ import { cmpCodePoints, escapeRegExp, findAll, splitWs } from "./util.ts";
 const NB = "(?<![A-Za-z0-9_])";
 const NA = "(?![A-Za-z0-9_])";
 const TAG = /\[([A-Z][A-Z0-9_]*)_([0-9]+)\]/gu;
-// the tail of a text that could still grow into a sensitive reference (see handles.SREF)
-const SREF_OPEN = /\u27e6?sref:(?:[A-Za-z0-9_-]{0,32}|[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{0,127})$/gu;
 const DIGIT_RUN = /(?<![0-9])\+?[0-9](?:[ .()-]{0,2}[0-9]){5,22}(?![0-9])/gu;
 
 let dateRegexes: [RegExp, number][] | null = null;
@@ -261,10 +259,10 @@ export class StreamRestorer {
     let cut = this.buf.length - hold;
     // never cut between the two halves of a surrogate pair
     if (cut > 0 && isHigh(this.buf.charCodeAt(cut - 1)) && isLow(this.buf.charCodeAt(cut))) cut -= 1;
-    // hold back a sensitive reference that is still arriving, so a digit run inside it is never restored
-    for (const m of this.buf.matchAll(SREF_OPEN)) cut = Math.min(cut, m.index);
+    // Never cut a sensitive reference in half: the tail we keep is longer than what comes before a reference's id (39
+    // characters), so by the time a digit run in the id leaves the tail, the reference is long enough to be seen.
     for (const [b, e] of srefRegions(context)) {
-      if (b - offset < cut && cut < e - offset) cut = b - offset; // and never cut one in half
+      if (b - offset < cut && cut < e - offset) cut = b - offset;
     }
     for (const m of found) {
       const ms = m.start - offset;
