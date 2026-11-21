@@ -14,6 +14,9 @@ Node 23.6 or newer.
 
 ## How a change lands
 
+Every change comes in as a pull request against `main`, and the required CI checks must pass before it is merged.
+Security issues do not go in a pull request or an issue: report them privately as `SECURITY.md` says.
+
 1. **Spec first.** Say in `spec/open-pseudonym.md` what an implementation must do.
 2. **Data next.** Patterns live in `tools/make_patterns.py` (it writes `data/patterns.json`); pools and profiles in
    `data/`. Run `python tools/sync_data.py` to copy them into both SDKs.
