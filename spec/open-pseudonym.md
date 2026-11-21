@@ -753,6 +753,19 @@ masked with `sensitive: true`, and MAY add an `evidenceRef` that points at a rec
 "canonicalization": "jcs/rfc8785"}`. This is a note on how the two could fit, not a claim that SEP-1913 adopts it or
 that any host reads it. References of 10.5 pass through a gateway untouched.
 
+### 12.3 Gateway guardrail
+
+A guardrail inside an LLM gateway (for example the LiteLLM proxy) applies 12.1 without being the HTTP endpoint
+itself. Before the model call it masks every field the gateway will send to the model, leaving the gateway's own
+routing, auth and logging fields alone because they never leave it, and runs the egress check of 11.1 on the masked
+request. A gateway that picks a deployment, retries or falls back after that point MUST check the final request of
+each attempt again, at the last point that can still stop it, and a receipt (11.2) is made per attempt with `dest` set
+to that deployment's host; the receipt then covers the request as the gateway hands it to its provider adapter, which
+may reshape it but adds no content. Answers are restored as in 12.1, into a copy: a gateway may cache the objects it
+passes to the guardrail, and a cached real value would reach the next caller. Sessions are keyed by the caller's
+gateway identity together with any session id the caller sends, so one caller cannot read another's vault by naming
+its session. Call types the guardrail cannot mask or restore are refused unless the operator exempts them by name.
+
 ## 13. Wording
 
 Accurate: "personal details are replaced with consistent stand-ins before anything leaves your device"; "the key to

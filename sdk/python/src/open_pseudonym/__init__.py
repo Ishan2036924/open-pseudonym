@@ -17,7 +17,7 @@ from .policy import (
 from .session import Masked, RefusedData, Replacement, Resolved, Session
 from .vault import Vault, VaultError
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "LEVELS", "Approval", "EgressLeak", "EgressLog", "HandleRefused", "Leak", "Masked", "Policy", "PolicyError",
