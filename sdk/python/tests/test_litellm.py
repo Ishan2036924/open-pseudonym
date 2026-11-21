@@ -354,3 +354,13 @@ async def test_restoring_never_writes_real_values_into_objects_litellm_keeps():
     got = [c async for c in g.async_post_call_streaming_iterator_hook(ALICE, upstream(), data)]
     assert got[0].choices[0].delta.content == "Dana Reyes"
     assert kept[0].choices[0].delta.content == f"{first} {last}"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("headers", [{"x-opn-source-site": {"a": 1}}, {"x-opn-source-sender": ["a@acme.com"]},
+                                     {"x-opn-session": 5}, {"x-opn-profile": None}])
+async def test_header_values_that_are_not_text_are_ignored(headers):
+    """Found by fuzzing: an object as x-opn-source-site raised AttributeError out of the hook (a 500, not a refusal)."""
+    data = await masked(guard(), headers=headers)
+    for value in REAL:
+        assert value not in json.dumps(outgoing(data))

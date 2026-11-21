@@ -292,7 +292,7 @@ async def test_personal_data_under_a_structural_key_is_refused_not_sent():
     up = Upstream(lambda body: httpx.Response(200, json={}))
     client, _ = client_for(up)
     async with client:
-        r = await client.post("/v1/responses", json={"model": "m", "input": [{"role": "user", "content": [
+        await client.post("/v1/responses", json={"model": "m", "input": [{"role": "user", "content": [
             {"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgo=",
              "detail": "Dana Reyes, SSN 123-45-6789"}]}]})
     assert "123-45-6789" not in json.dumps(up.seen)  # masked like any text, or refused; never sent as is

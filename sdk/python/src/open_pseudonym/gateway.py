@@ -145,36 +145,54 @@ class Gateway:
                 pass
         return s.restore_keep_handles(args)
 
-    def restore_chat(self, s: Session, data: dict) -> dict:
-        for choice in data.get("choices") or []:
-            msg = choice.get("message") or {}
+    # The answer comes from the model provider: any part may be missing or of another type. Parts that are not the
+    # expected shape are left exactly as they are, never a crash halfway through a restore.
+
+    def restore_chat(self, s: Session, data: Any) -> Any:
+        for choice in _dicts(_field(data, "choices")):
+            msg = choice.get("message")
+            if not isinstance(msg, dict):
+                continue
             if isinstance(msg.get("content"), str):
                 msg["content"] = s.restore(msg["content"])
-            for call in msg.get("tool_calls") or []:
-                fn = call.get("function") or {}
-                if isinstance(fn.get("arguments"), str):
-                    fn["arguments"] = self.restore_args(s, fn.get("name", ""), fn["arguments"])
+            for call in _dicts(msg.get("tool_calls")):
+                fn = call.get("function")
+                if isinstance(fn, dict) and isinstance(fn.get("arguments"), str):
+                    fn["arguments"] = self.restore_args(s, _name(fn), fn["arguments"])
         return data
 
-    def restore_anthropic(self, s: Session, data: dict) -> dict:
-        for block in data.get("content") or []:
-            if block.get("type") == "text":
+    def restore_anthropic(self, s: Session, data: Any) -> Any:
+        for block in _dicts(_field(data, "content")):
+            if block.get("type") == "text" and isinstance(block.get("text"), str):
                 block["text"] = s.restore(block["text"])
             elif block.get("type") == "tool_use":
-                block["input"] = self.restore_args(s, block.get("name", ""), block.get("input"))
+                block["input"] = self.restore_args(s, _name(block), block.get("input"))
         return data
 
-    def restore_responses(self, s: Session, data: dict) -> dict:
-        for item in data.get("output") or []:
+    def restore_responses(self, s: Session, data: Any) -> Any:
+        for item in _dicts(_field(data, "output")):
             if item.get("type") == "message":
-                for part in item.get("content") or []:
+                for part in _dicts(item.get("content")):
                     if isinstance(part.get("text"), str):
                         part["text"] = s.restore(part["text"])
             elif item.get("type") == "function_call" and isinstance(item.get("arguments"), str):
-                item["arguments"] = self.restore_args(s, item.get("name", ""), item["arguments"])
-        if isinstance(data.get("output_text"), str):
+                item["arguments"] = self.restore_args(s, _name(item), item["arguments"])
+        if isinstance(data, dict) and isinstance(data.get("output_text"), str):
             data["output_text"] = s.restore(data["output_text"])
         return data
+
+
+def _field(data: Any, key: str) -> Any:
+    return data.get(key) if isinstance(data, dict) else None
+
+
+def _dicts(value: Any) -> list[dict]:
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
+def _name(obj: dict) -> str:
+    name = obj.get("name")
+    return name if isinstance(name, str) else ""
 
 
 def file_id(sid: str) -> str:

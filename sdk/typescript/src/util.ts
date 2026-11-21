@@ -4,7 +4,7 @@
 // What Python's str.split() and str.strip() treat as whitespace.
 export const WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
 const WS_RUN = new RegExp(`[${WS}]+`, "u");
-const WS_EDGES = new RegExp(`^[${WS}]+|[${WS}]+$`, "gu");
+const WS_CHAR = new RegExp(`^[${WS}]$`, "u");
 const WS_START = new RegExp(`^[${WS}]+`, "u");
 
 /** Python's `s.split()`: runs of whitespace separate words, empty pieces are dropped. */
@@ -12,9 +12,13 @@ export function splitWs(s: string): string[] {
   return s.split(WS_RUN).filter((w) => w !== "");
 }
 
-/** Python's `s.strip()`. */
+/** Python's `s.strip()`. Loops, not `/[ws]+$/`: that regex backtracks quadratically on a long inner run of spaces. */
 export function stripWs(s: string): string {
-  return s.replace(WS_EDGES, "");
+  let start = 0;
+  let end = s.length;
+  while (start < end && WS_CHAR.test(s[start])) start++; // every WS character is a single UTF-16 unit
+  while (end > start && WS_CHAR.test(s[end - 1])) end--;
+  return start === 0 && end === s.length ? s : s.slice(start, end);
 }
 
 /** Python's `s.lstrip()`. */
@@ -194,4 +198,17 @@ export function lenientBase64(s: string): Uint8Array | null {
     }
   }
   return quad === 0 ? Uint8Array.from(out) : null;
+}
+
+/** Python's `s.rstrip(chars)` for single-unit characters. A loop, not `/\.+$/`: that regex backtracks
+ * quadratically on a long run of dots that is not at the end ("a....a"), and hosts come from untrusted text. */
+export function rstripChars(s: string, chars: string): string {
+  let end = s.length;
+  while (end > 0 && chars.includes(s[end - 1])) end--;
+  return end === s.length ? s : s.slice(0, end);
+}
+
+/** Python's `s.rstrip(".")`. */
+export function rstripDots(s: string): string {
+  return rstripChars(s, ".");
 }

@@ -3,7 +3,7 @@
 This project protects personal data, so reports are very welcome.
 
 **Please do not open a public issue for a vulnerability.** Email **support@atlasiw.com** with "Open Pseudonym
-security" in the subject, or use GitHub's private "Report a vulnerability" button on this repository if it is shown.
+security" in the subject, or use the "Report a vulnerability" button on this repository's Security tab (private vulnerability reporting is on).
 Include:
 
 - what breaks: a real value that reaches the model when it should not, a handle filled somewhere its binding forbids,

@@ -1,0 +1,8 @@
+# Lint for the Python SDK, tests, tools, bench and examples. CI runs `ruff check .` with ruff from the hash-locked
+# ci/test.txt.
+target-version = "py310"
+line-length = 120
+extend-exclude = ["sdk/typescript", "vectors", "schemas", "data"]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

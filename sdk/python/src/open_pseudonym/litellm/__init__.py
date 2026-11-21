@@ -108,7 +108,8 @@ def _refuse(status: int, kind: str, message: str, **extra: Any) -> HTTPException
 def _headers(data: dict) -> dict:
     meta = data.get("metadata") or data.get("litellm_metadata") or {}
     headers = meta.get("headers") if isinstance(meta, dict) else None
-    return {str(k).lower(): v for k, v in headers.items()} if isinstance(headers, dict) else {}
+    # header values are text; anything else (a list or an object someone put in metadata) is ignored, never read
+    return {str(k).lower(): v for k, v in headers.items() if isinstance(v, str)} if isinstance(headers, dict) else {}
 
 
 def _owner(user: Any) -> str:

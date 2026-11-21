@@ -449,9 +449,7 @@ def release_vectors():
         return {"name": name, "profile": profile, "seed": zero, "now": NOW, "mask": {"text": text, "source": source},
                 "approve": approve, "steps": steps, "never_in_records": never + [nonce]}
 
-    otp = {"args": {"selector": "#otp", "text": "{{OTP_1}}"}}
     a1 = {"selector": "#otp", "text": "{{OTP_1}}"}
-    desc_otp = "a 6-digit one-time code from acme.com, valid until 00:10 UTC"
     cases = [
         case("allowed by the binding, then used up", "browse_and_fill", mail, acme, None, [
             {"args": a1, "sink": {"tool": "type", "site": "https://evil.example"}},
@@ -495,7 +493,6 @@ def release_vectors():
             {"args_json": '{"n": 12345678901234567890, "f": 1.5, "big": 1e21, "text": "{{OTP_1}}"}', "sink": type_acme},
         ]),
     ]
-    sh = shop["site"]
     shown = digest(canonical({"nonce": nonce, "description": "a Visa card ending 4242", "handle": "{{CARD_1}}",
                               "site": "shop.example", "tool": "type"}))
     wrong_site = lambda seq, prev, **kw: rec(seq, prev, handle="{{OTP_1}}", data="OTP", source="acme.com",  # noqa: E731
@@ -629,7 +626,6 @@ def release_vectors():
 
 
 def checkpoint_vectors():
-    writer = Signer.from_seed(bytes(range(32)))
     plan = [("allow", None), ("deny", "wrong_site"), ("allow", None), ("allow", None), ("deny", "used_up"), ("allow", None)]
     entries = []
     for n, (decision, code) in enumerate(plan, start=1):

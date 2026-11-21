@@ -36,6 +36,9 @@ jobs:
       - name: CI installs are hash-locked and the locks cover every SDK extra a job tests
         if: matrix.python == '3.13'
         run: python tools/check_ci_locks.py && python tools/test_check_ci_locks.py
+      - name: ruff (SDK, tests, tools, bench and examples; ruff from the lock)
+        if: matrix.python == '3.13'
+        run: python -m ruff check .
       - name: vector generator agrees with the SDK
         run: python tools/make_vectors.py && git diff --exit-code vectors
       - name: offline benchmark runs
@@ -59,7 +62,35 @@ jobs:
       - name: the SDK itself, from a wheel built with the locked setuptools (nothing unhashed is fetched)
         run: python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist ./sdk/python && python -m pip install --no-deps dist/*.whl
       - name: guardrail unit tests and end to end through the real LiteLLM proxy (fake model, no network)
-        run: cd sdk/python && python -m pytest -q -rs tests/test_litellm.py tests/test_litellm_e2e.py tests/test_proxy.py
+        run: cd sdk/python && python -m pytest -q -rs tests/test_litellm.py tests/test_litellm_e2e.py tests/test_proxy.py tests/test_gateway.py tests/test_fuzz_litellm.py
+
+  fuzz:
+    # The property tests run in the jobs above at 60 examples each; this runs them longer, seeded, and checks that the
+    # Python and TypeScript canonical JSON agree byte for byte on a seeded corpus. OPN_FUZZ_EXAMPLES sets the budget.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPN_FUZZ_EXAMPLES: "1000"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: dependencies from the hash-locked ci/test.txt
+        run: python -m pip install --require-hashes -r ci/test.txt
+      - name: the SDK itself, from a wheel built with the locked setuptools (nothing unhashed is fetched)
+        run: python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist ./sdk/python && python -m pip install --no-deps dist/*.whl
+      - name: fast-check from the npm lockfile
+        run: cd sdk/typescript && npm ci --ignore-scripts --no-audit --no-fund
+      - name: Hypothesis (detect, mask/restore, stream, resolve_args, egress, srefs, verify_log, JCS, gateway) and the Python vs TypeScript JCS check
+        run: cd sdk/python && python -m pytest -q -rs tests/test_fuzz.py tests/test_redos.py
+      - name: fast-check (the same properties in TypeScript) and the ReDoS time bounds
+        run: cd sdk/typescript && node --test test/fuzz.test.ts test/redos.test.ts
 
   browser:
     runs-on: ubuntu-24.04

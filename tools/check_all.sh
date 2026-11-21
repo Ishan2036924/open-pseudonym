@@ -17,3 +17,4 @@ else
 fi
 PYTHONPATH=sdk/python/src "$PY" -m open_pseudonym demo > /dev/null && echo "demo: ok"
 if command -v gitleaks > /dev/null; then gitleaks dir . --no-banner --redact -c .gitleaks.toml; else echo "skip: gitleaks"; fi
+if "$PY" -m ruff --version > /dev/null 2>&1; then "$PY" -m ruff check . && echo "ruff: ok"; else echo "skip: ruff (pip install --require-hashes -r ci/test.txt)"; fi

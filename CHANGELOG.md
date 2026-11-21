@@ -3,7 +3,7 @@
 ## 0.4.0 (2026-11-21)
 
 A LiteLLM proxy guardrail, so any app behind a LiteLLM proxy gets Open Pseudonym from a few lines of `config.yaml`.
-No change to the wire format, the vectors or the TypeScript SDK (its version moves with the Python one).
+Also fixes from code scanning and property-based fuzzing in both SDKs. No change to the wire format or the vectors.
 
 ### Added
 
@@ -22,6 +22,29 @@ No change to the wire format, the vectors or the TypeScript SDK (its version mov
 - The HTTP-free half of the proxy (sessions, vault files, receipt logs, body masking and restoring) moved to
   `open_pseudonym.gateway.Gateway`; `Proxy` builds on it and behaves as before. Logs of sessions dropped from the
   session cache are now dropped too (they are reopened from disk when needed).
+- **Tests and CI.** Property-based fuzzing in both SDKs (Hypothesis in the `[test]` extra, fast-check as a pinned dev
+  dependency): detection, mask then restore, streaming restore cut anywhere, `resolve_args` with hostile arguments,
+  sinks and approval answers, the egress check, sensitive references, `verify_log` on damaged logs, canonical JSON
+  (idempotent, and byte-equal between Python and TypeScript on a seeded corpus), the gateway and the LiteLLM
+  guardrail. Seeded; 60 examples per property in the normal suites, 1,000 in a new `fuzz` CI job,
+  `OPN_FUZZ_EXAMPLES` for more. `ruff check` (E4, E7, E9, F) runs in CI and `tools/check_all.sh`.
+
+### Fixed
+
+- **Polynomial ReDoS (TypeScript, CodeQL `js/polynomial-redos`).** Trailing dots were trimmed with `/\.+$/` and
+  whitespace with `/[ws]+$/`, which backtrack quadratically on a long run that is not at the end: a 50,000-character
+  host took 3 to 7 s in `isPublicSuffix`, `boundSite` and `siteMatches`, and `stripWs` 5 s. They are loops now, with
+  the same results as Python's `rstrip` and `strip` (which were already linear).
+- **Quadratic `registrable` (both SDKs).** It tried every suffix length of a host: 50,000 dots took 12.5 s in Python
+  and 15.8 s in TypeScript. It now tries no more labels than the longest known suffix has.
+- **TypeScript canonical JSON accepted values that are not JSON.** An array with holes came out as `[1,,2]`, and a
+  `Date`, `Map`, `Set`, typed array or boxed string as `{}` or index keys, so `resolveArgs` signed the digest of other
+  arguments. They are refused now, as in Python, and such a call is refused with `malformed` (spec 10.4).
+- **Gateway restore on answers of an unexpected shape.** A provider answer with a null or mistyped part (`"choices":
+  [null]`, a number where a list belongs) raised `AttributeError` or `TypeError`: the local proxy answered 500 and the
+  LiteLLM guardrail failed the call. Parts that are not the expected shape are now passed through unchanged.
+- **LiteLLM guardrail header values that are not text** (an object in `x-opn-source-site`) raised `AttributeError`
+  out of the pre-call hook instead of being ignored.
 
 ## 0.3.0 (2026-11-20)
 
