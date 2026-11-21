@@ -1,6 +1,6 @@
 # Open Pseudonym
 
-[![PyPI](https://img.shields.io/pypi/v/open-pseudonym)](https://pypi.org/project/open-pseudonym/) [![npm](https://img.shields.io/npm/v/open-pseudonym)](https://www.npmjs.com/package/open-pseudonym) [![ci](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/open-pseudonym)](https://pypi.org/project/open-pseudonym/) [![npm](https://img.shields.io/npm/v/open-pseudonym)](https://www.npmjs.com/package/open-pseudonym) [![ci](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml/badge.svg)](https://github.com/Ishan2036924/open-pseudonym/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ishan2036924/open-pseudonym/badge)](https://scorecard.dev/viewer/?uri=github.com/Ishan2036924/open-pseudonym)
 
 **Keep personal data away from AI models without making them worse at the task.**
 
