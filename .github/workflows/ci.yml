@@ -54,7 +54,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: python -m pip install "./sdk/python[litellm,proxy,test]" "litellm[proxy]==1.108.2"
+      - name: dependencies from the hash-locked ci/litellm.txt (LiteLLM pinned to the tested release)
+        run: python -m pip install --require-hashes -r ci/litellm.txt
+      - name: the SDK itself, from a wheel built with the locked setuptools (nothing unhashed is fetched)
+        run: python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist ./sdk/python && python -m pip install --no-deps dist/*.whl
       - name: guardrail unit tests and end to end through the real LiteLLM proxy (fake model, no network)
         run: cd sdk/python && python -m pytest -q -rs tests/test_litellm.py tests/test_litellm_e2e.py tests/test_proxy.py
 

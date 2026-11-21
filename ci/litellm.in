@@ -1,0 +1,11 @@
+# CI "litellm" job: core SDK, [litellm], [proxy] and [test] extras, the guardrail tests through the real LiteLLM proxy.
+# Mirrors sdk/python/pyproject.toml (checked by tools/check_ci_locks.py). Relock: uv pip compile --universal --python-version 3.13 --generate-hashes ci/litellm.in -o ci/litellm.txt
+# extras: litellm, proxy, test
+cryptography>=42
+litellm[proxy]==1.108.2
+starlette>=0.40
+uvicorn>=0.30
+httpx>=0.27
+pytest>=8
+anyio>=4
+setuptools>=77
