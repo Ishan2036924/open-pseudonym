@@ -140,12 +140,14 @@ def fill_template(template: str, digits: str) -> str:
 
 
 _SUFFIXES: frozenset[str] | None = None
+_SUFFIX_DEPTH = 0  # labels in the longest known suffix
 
 
 def _suffixes() -> frozenset[str]:
-    global _SUFFIXES
+    global _SUFFIXES, _SUFFIX_DEPTH
     if _SUFFIXES is None:
         _SUFFIXES = frozenset(pools()["public_suffixes"])
+        _SUFFIX_DEPTH = max((s.count(".") + 1 for s in _SUFFIXES), default=0)
     return _SUFFIXES
 
 
@@ -159,7 +161,9 @@ def registrable(host: str) -> str:
     with the full list should use it."""
     labels = host.lower().rstrip(".").split(".")
     suffixes = _suffixes()
-    for n in range(len(labels) - 1, 0, -1):  # longest known suffix first
+    # longest known suffix first; no suffix is longer than _SUFFIX_DEPTH labels, so a host with thousands of labels
+    # costs no more than a short one (trying every length made it quadratic: 12 s for 50,000 dots)
+    for n in range(min(len(labels) - 1, _SUFFIX_DEPTH), 0, -1):
         if ".".join(labels[-n:]) in suffixes:
             return ".".join(labels[-(n + 1):]) if len(labels) > n else host.lower()
     return ".".join(labels[-2:])

@@ -16,7 +16,7 @@ import * as checks from "./checks.ts";
 import * as dates from "./dates.ts";
 import { patterns as sharedPatterns, pools, type PatternSpec } from "./data.ts";
 import { checkTypeName } from "./types.ts";
-import { cmpCodePoints, cpLength, escapeRegExp, findAll, splitWs } from "./util.ts";
+import { cmpCodePoints, cpLength, escapeRegExp, findAll, rstripChars, splitWs } from "./util.ts";
 
 const NB = "(?<![A-Za-z0-9_])";
 const NA = "(?![A-Za-z0-9_])";
@@ -312,6 +312,6 @@ export function growNames(spans: Span[], text: string): Span[] {
 }
 
 function sentenceStart(text: string, at: number): boolean {
-  const before = text.slice(0, at).replace(/[ \t]+$/u, "");
+  const before = rstripChars(text.slice(0, at), " \t");
   return before.length === 0 || ".!?:\n\"(".includes(before[before.length - 1]);
 }

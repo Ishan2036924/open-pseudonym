@@ -8,7 +8,7 @@
 import { isPublicSuffix } from "./fakes.ts";
 import { canonical, digest } from "./jcs.ts";
 import { digitsOf } from "./types.ts";
-import { stripWs, truthy } from "./util.ts";
+import { rstripDots, stripWs, truthy } from "./util.ts";
 
 export const HANDLE = /\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}/gu;
 
@@ -117,7 +117,7 @@ export interface SinkLike {
 export function boundSite(source: SourceLike): string | null {
   let host: string;
   if (source.site) host = hostOf(source.site);
-  else if (source.sender && source.sender.includes("@")) host = source.sender.slice(source.sender.lastIndexOf("@") + 1).toLowerCase().replace(/\.+$/, "");
+  else if (source.sender && source.sender.includes("@")) host = rstripDots(source.sender.slice(source.sender.lastIndexOf("@") + 1).toLowerCase());
   else return null;
   // a bare shared suffix (github.io) belongs to everyone under it, so it is no binding at all
   return host === "" || isPublicSuffix(host) ? null : host;
@@ -279,8 +279,8 @@ export function hostOf(site: string): string {
  */
 export function siteMatches(site: string | null | undefined, allowed: string[]): boolean {
   if (!site) return false;
-  const h = hostOf(site).replace(/\.+$/, "");
-  for (const a of allowed.map((x) => x.toLowerCase().replace(/\.+$/, ""))) {
+  const h = rstripDots(hostOf(site));
+  for (const a of allowed.map((x) => rstripDots(x.toLowerCase()))) {
     if (a.startsWith("*.")) {
       if (h === a.slice(2) || h.endsWith(a.slice(1))) return true;
     } else if (h === a) {

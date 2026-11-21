@@ -15,7 +15,7 @@ import { digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
 import {
   capitalize, cmpCodePoints, cpLength, isAlnumChar, isAlphaChar, isDigitChar, isLower, isUpper, lstripWs,
-  splitWs, stripWs,
+  rstripDots, splitWs, stripWs,
 } from "./util.ts";
 
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -131,9 +131,13 @@ export function fillTemplate(template: string, digits: string): string {
 }
 
 let suffixCache: ReadonlySet<string> | null = null;
+let suffixDepth = 0; // labels in the longest known suffix
 
 function suffixes(): ReadonlySet<string> {
-  if (suffixCache === null) suffixCache = new Set(pools().public_suffixes);
+  if (suffixCache === null) {
+    suffixCache = new Set(pools().public_suffixes);
+    for (const s of suffixCache) suffixDepth = Math.max(suffixDepth, s.split(".").length);
+  }
   return suffixCache;
 }
 
@@ -143,13 +147,15 @@ function suffixes(): ReadonlySet<string> {
  * use it.
  */
 export function isPublicSuffix(host: string): boolean {
-  return suffixes().has(host.toLowerCase().replace(/\.+$/, ""));
+  return suffixes().has(rstripDots(host.toLowerCase()));
 }
 
 export function registrable(host: string): string {
-  const labels = host.toLowerCase().replace(/\.+$/, "").split(".");
+  const labels = rstripDots(host.toLowerCase()).split(".");
   const known = suffixes();
-  for (let n = labels.length - 1; n > 0; n--) { // longest known suffix first
+  // longest known suffix first; none is longer than suffixDepth labels, so a host with thousands of labels costs no
+  // more than a short one (trying every length made it quadratic: 7 s for 50,000 dots)
+  for (let n = Math.min(labels.length - 1, suffixDepth); n > 0; n--) {
     if (known.has(labels.slice(-n).join("."))) return labels.slice(-(n + 1)).join(".");
   }
   return labels.slice(-2).join(".");
@@ -350,7 +356,7 @@ export function address(ctx: Ctx, real: string): string {
 
 /** Map a host to a fake one. The registrable part maps consistently; generic subdomains stay. */
 export function domain(ctx: Ctx, host: string): string {
-  host = host.toLowerCase().replace(/\.+$/, "");
+  host = rstripDots(host.toLowerCase());
   const reg = registrable(host);
   let fakeReg = ctx.vault.domains.get(reg);
   if (fakeReg === undefined) {
@@ -359,7 +365,7 @@ export function domain(ctx: Ctx, host: string): string {
     ctx.vault.used.add(fakeReg);
     ctx.vault.touch();
   }
-  const sub = (reg.length === 0 ? "" : host.slice(0, host.length - reg.length)).replace(/\.+$/, "");
+  const sub = rstripDots(reg.length === 0 ? "" : host.slice(0, host.length - reg.length));
   if (!sub) return fakeReg;
   const labels = sub.split(".").map((lab) => (GENERIC_SUBDOMAINS.has(lab) ? lab : shape(ctx, lab, "subdomain")));
   return labels.join(".") + "." + fakeReg;
