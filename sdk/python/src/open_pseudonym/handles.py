@@ -19,13 +19,71 @@ from .types import digits_of
 HANDLE = re.compile(r"\{\{([A-Z][A-Z0-9_]*_[0-9]+)\}\}")
 
 
-class HandleRefused(Exception):
-    """The real value was not filled in. `reason` is one short phrase, safe to show and to log."""
+# Stable codes for every way a handle can be refused. The human text of `reason` may be reworded one day; a code
+# never is, so an app and a release record (spec 10.4) can rely on it.
+CODES = ("unknown_handle", "unbound", "expired", "used_up", "wrong_tool", "wrong_site", "needs_approval",
+         "not_approved", "not_recorded")
 
-    def __init__(self, handle: str, reason: str):
+
+class HandleRefused(Exception):
+    """The real value was not filled in. `reason` is one short phrase, safe to show and to log; `code` is the stable
+    name of the reason (one of CODES), or None for a refusal that is not a release decision."""
+
+    def __init__(self, handle: str, reason: str, code: str | None = None):
         super().__init__(f"{handle}: {reason}")
         self.handle = handle
         self.reason = reason
+        self.code = code
+
+
+@dataclass(frozen=True)
+class Approval:
+    """What an approval callback may return instead of a plain yes or no, so the release record can say who allowed
+    the release. `ref` and `digest` let an app pass the id and the token digest of an OAC Consent."""
+
+    allowed: bool
+    by: str | None = None
+    channel: str | None = None
+    ref: str | None = None
+    digest: str | None = None
+
+
+DIGEST = re.compile(r"^sha-256:[A-Za-z0-9_-]{43}$")
+
+
+def as_approval(answer) -> Approval:
+    """Turn what an approval callback returned (a bool, an Approval, or a dict with the same fields) into an Approval.
+    Anything else is a bug in the app and raises, so nothing is filled by accident."""
+    if isinstance(answer, Approval):
+        found = answer
+    elif isinstance(answer, bool):
+        found = Approval(answer)
+    elif isinstance(answer, dict) and isinstance(answer.get("allowed"), bool):
+        found = Approval(**{k: answer.get(k) for k in ("allowed", "by", "channel", "ref", "digest")})
+    else:
+        raise TypeError("an approval callback returns a bool or an Approval")
+    for name in ("by", "channel", "ref"):
+        v = getattr(found, name)
+        if v is not None and (not isinstance(v, str) or not 0 < len(v) <= 256):
+            raise ValueError(f"Approval.{name} must be a short string")
+    if found.digest is not None and not (isinstance(found.digest, str) and DIGEST.match(found.digest)):
+        raise ValueError("Approval.digest must look like sha-256:<43 characters>")
+    if not isinstance(found.allowed, bool):
+        raise TypeError("Approval.allowed must be a bool")
+    return found
+
+
+# Sensitive References (spec 10.5) are opaque to this SDK: a server keeps the value, the model only carries the
+# reference. They look like `sref:<kind>:<id>` or `⟦sref:<kind>:<id>⟧` (kind 1 to 32, id 20 to 128 characters of
+# letters, digits, "_" and "-"). We never mask one, never make a stand-in for one, never restore or fill one, and never
+# count one as a leak.
+_SREF_BODY = r"sref:[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{20,128}"
+SREF = re.compile(r"\u27e6" + _SREF_BODY + r"\u27e7|(?<![A-Za-z0-9_-])" + _SREF_BODY + r"(?![A-Za-z0-9_-])")
+
+
+def sref_regions(text: str) -> list[tuple[int, int]]:
+    """Where the sensitive references in `text` are, as (start, end) pairs."""
+    return [(m.start(), m.end()) for m in SREF.finditer(text)]
 
 
 @dataclass(frozen=True)
@@ -149,14 +207,14 @@ def check(handle: str, meta: dict, sink: Sink, now: int) -> None:
     """Raise HandleRefused unless the handle may be filled into this sink right now."""
     if not meta.get("sites") and not meta.get("tools"):
         # fail closed: a handle that nobody bound to a site or a tool could otherwise go anywhere
-        raise HandleRefused(handle, "not bound to a site or tool")
+        raise HandleRefused(handle, "not bound to a site or tool", "unbound")
     if meta.get("expires_at") is not None and now >= meta["expires_at"]:  # gone at its expiry second
-        raise HandleRefused(handle, "expired")
+        raise HandleRefused(handle, "expired", "expired")
     if meta.get("uses_left") is not None and meta["uses_left"] <= 0:
-        raise HandleRefused(handle, "already used")
+        raise HandleRefused(handle, "already used", "used_up")
     tools = meta.get("tools")
     if tools and sink.tool not in tools:
-        raise HandleRefused(handle, "not allowed for this tool")
+        raise HandleRefused(handle, "not allowed for this tool", "wrong_tool")
     sites = meta.get("sites") or []
     if sites and not site_matches(sink.site, sites):
-        raise HandleRefused(handle, "bound to a different site")
+        raise HandleRefused(handle, "bound to a different site", "wrong_site")

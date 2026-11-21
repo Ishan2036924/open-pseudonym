@@ -8,8 +8,8 @@ The short version:
     reply = s.restore(model_reply)  # what the person reads
 """
 
-from .egress import EgressLeak, EgressLog, Leak, verify_log
-from .handles import HandleRefused, Sink, Source
+from .egress import EgressLeak, EgressLog, Leak, make_checkpoint, verify_log
+from .handles import Approval, HandleRefused, Sink, Source, sref_regions
 from .jws import Signer
 from .policy import (
     LEVELS, Policy, PolicyError, Rule, load_level, load_profile, policy_for, profile_names, suggest_profile,
@@ -17,10 +17,11 @@ from .policy import (
 from .session import Masked, RefusedData, Replacement, Resolved, Session
 from .vault import Vault, VaultError
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
-    "LEVELS", "EgressLeak", "EgressLog", "HandleRefused", "Leak", "Masked", "Policy", "PolicyError", "RefusedData",
-    "Replacement", "Resolved", "Rule", "Session", "Signer", "Sink", "Source", "Vault", "VaultError",
-    "load_level", "load_profile", "policy_for", "profile_names", "suggest_profile", "verify_log", "__version__",
+    "LEVELS", "Approval", "EgressLeak", "EgressLog", "HandleRefused", "Leak", "Masked", "Policy", "PolicyError",
+    "RefusedData", "Replacement", "Resolved", "Rule", "Session", "Signer", "Sink", "Source", "Vault", "VaultError",
+    "load_level", "load_profile", "make_checkpoint", "policy_for", "profile_names", "sref_regions",
+    "suggest_profile", "verify_log", "__version__",
 ]
