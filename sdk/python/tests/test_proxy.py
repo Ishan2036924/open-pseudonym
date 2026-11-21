@@ -274,19 +274,15 @@ async def test_documents_names_and_metadata_are_masked_too():
 
 
 @pytest.mark.anyio
-async def test_a_field_masking_missed_is_still_caught_by_detection():
+async def test_a_field_masking_missed_is_still_caught_by_detection(monkeypatch):
     from open_pseudonym.proxy.app import Proxy
 
     up = Upstream(lambda body: httpx.Response(200, json={}))
     client, _ = client_for(up)
-    original = Proxy.__dict__["mask_body"]  # the staticmethod itself, so it goes back exactly as it was
-    Proxy.mask_body = staticmethod(lambda s, body, source: body)  # plant a defect: masking does nothing
-    try:
-        async with client:
-            r = await client.post("/v1/chat/completions",
-                                  json={"model": "m", "messages": [{"role": "user", "content": "SSN 123-45-6789"}]})
-    finally:
-        Proxy.mask_body = original
+    monkeypatch.setattr(Proxy, "mask_body", staticmethod(lambda s, body, source: body))  # plant a defect: no masking
+    async with client:
+        r = await client.post("/v1/chat/completions",
+                              json={"model": "m", "messages": [{"role": "user", "content": "SSN 123-45-6789"}]})
     assert r.status_code == 422 and up.seen == []
 
 
