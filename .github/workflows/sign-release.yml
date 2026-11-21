@@ -1,0 +1,70 @@
+name: sign-release
+
+# Attach the exact files a release published (PyPI wheel and sdist, npm tarball) to its GitHub release page, each
+# with a Sigstore bundle (<file>.sigstore.json). Nothing is rebuilt: the files are downloaded from PyPI and npm and
+# checked against the registries' own digests first (tools/fetch_published.py). Signing is keyless: GitHub's OIDC
+# token proves which workflow signed. Verify a file with:
+#   python -m sigstore verify github --cert-identity \
+#     https://github.com/OWNER/REPO/.github/workflows/sign-release.yml@refs/tags/vX.Y.Z FILE
+# (for a hand-run backfill the identity ends in @refs/heads/main). See RELEASING.md.
+on:
+  workflow_call:  # from a release workflow, once the GitHub release page exists
+    inputs:
+      tag:
+        required: true
+        type: string
+  release:  # a page published by hand
+    types: [published]
+  workflow_dispatch:  # backfill an older release, or add the npm tarball once the staged version is approved
+    inputs:
+      tag:
+        description: "Release tag, for example v0.5.1"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write  # upload the files to the release page
+      id-token: write  # Sigstore keyless signing
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the tag is a version and has a release page
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::tag must look like vX.Y.Z, got '$TAG'"; exit 1; fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName
+      - name: download the published files and check PyPI's sha256 and npm's sha512 and sha1
+        env:
+          OUT: ${{ runner.temp }}/release
+        run: |
+          rc=0
+          python3 tools/fetch_published.py "$TAG" "$OUT" || rc=$?
+          if [ "$rc" = 3 ]; then
+            echo "::warning::npm has not made ${TAG#v} live yet (staged, waiting for approval). Signed the PyPI files only; after approving, run sign-release with tag $TAG."
+          elif [ "$rc" != 0 ]; then
+            exit "$rc"
+          fi
+          ls -l "$OUT"
+      - uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: ${{ runner.temp }}/release/*
+          release-signing-artifacts: false  # it would add the source archives of the ref; we upload below
+          verify: true
+          verify-cert-identity: https://github.com/${{ github.repository }}/.github/workflows/sign-release.yml@${{ github.ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+      - name: attach the files and their bundles to the release page
+        env:
+          OUT: ${{ runner.temp }}/release
+        run: |
+          ls -l "$OUT"
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "$OUT"/*

@@ -15,6 +15,14 @@ updates:
     groups:
       python:
         patterns: ["*"]
+  # CI's hash-locked requirements: ci/*.in compiled to ci/*.txt by uv pip compile (Dependabot relocks with hashes)
+  - package-ecosystem: uv
+    directory: /ci
+    schedule:
+      interval: weekly
+    groups:
+      ci-python:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /sdk/typescript
     schedule:

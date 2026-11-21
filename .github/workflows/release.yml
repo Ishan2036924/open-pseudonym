@@ -1,6 +1,7 @@
 name: release
 
 # On a version tag: publish to PyPI, stage on npm for approval. Trusted publishing, no stored tokens. See RELEASING.md.
+# Publishing the GitHub release page then runs sign-release.yml, which attaches the published files with Sigstore bundles.
 on:
   push:
     tags: ["v*"]
@@ -23,7 +24,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: python -m pip install "build>=1.2" && python -m build --outdir dist sdk/python
+      - name: build with the hash-locked ci/release.txt (no unhashed build backend)
+        run: python -m pip install --require-hashes -r ci/release.txt && python -m build --no-isolation --outdir dist sdk/python
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist

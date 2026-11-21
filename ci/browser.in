@@ -1,0 +1,8 @@
+# CI "browser" job: [browser] and [test] extras.
+# Mirrors sdk/python/pyproject.toml (checked by tools/check_ci_locks.py). Relock: uv pip compile --universal --python-version 3.10 --generate-hashes ci/browser.in -o ci/browser.txt
+# extras: browser, test
+cryptography>=42
+playwright==1.58.0
+pytest>=8
+anyio>=4
+setuptools>=77

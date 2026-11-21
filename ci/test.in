@@ -1,0 +1,15 @@
+# CI "python" job: core SDK, [proxy], [mcp], [openai], [anthropic] and [test] extras, schema checks and the package build.
+# Mirrors sdk/python/pyproject.toml (checked by tools/check_ci_locks.py). Relock: uv pip compile --universal --python-version 3.10 --generate-hashes ci/test.in -o ci/test.txt
+# extras: proxy, mcp, openai, anthropic, test
+cryptography>=42
+starlette>=0.40
+uvicorn>=0.30
+httpx>=0.27
+mcp>=2.3,<3
+openai>=1.50
+anthropic>=0.40
+pytest>=8
+anyio>=4
+jsonschema>=4.18
+build>=1.2
+setuptools>=77
