@@ -9,9 +9,9 @@ targetRules = ["generic-api-key"]
 regexes = ['''2B7E151628AED2A6ABF7158809CF4F3C''']
 
 [[allowlists]]
-description = "Receipt vector: a JWS signed with a published test key"
+description = "Receipt, release and checkpoint vectors: JWS signed with published test keys"
 targetRules = ["jwt"]
-paths = ['''^vectors/receipts\.json$''']
+paths = ['''^vectors/(receipts|releases|checkpoints)\.json$''']
 
 [[allowlists]]
 description = "Obviously fake keys in tests and fixtures (they contain the alphabet run abcdefghijklmnopqr)"
