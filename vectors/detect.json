@@ -362,6 +362,34 @@
      "https://linkedin.com/in/dana-reyes"
     ]
    ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "card sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ and 4242 4242 4242 4242",
+   "spans": [
+    [
+     "CARD",
+     "4242 4242 4242 4242"
+    ]
+   ]
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "ssn sref:ssn:12345678901234567890 phone ⟦sref:phone:16175550142617555014261755⟧ ok",
+   "spans": []
+  },
+  {
+   "profile": "strict",
+   "now": 1793836800,
+   "text": "xsref:contact:4242424242424242abcd and sref:contact:short and sref:contact:4242424242424242abcd!",
+   "spans": [
+    [
+     "CARD",
+     "4242424242424242"
+    ]
+   ]
   }
  ]
 }

@@ -504,6 +504,92 @@
      }
     }
    ]
+  },
+  {
+   "name": "sensitive references stay opaque",
+   "profile": "strict",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "known": {},
+   "steps": [
+    {
+     "op": "mask",
+     "text": "Call (617) 555-0142 about sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+     "expect": {
+      "text": "Call (206) 555-0112 about sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+      "notes": []
+     }
+    },
+    {
+     "op": "restore",
+     "text": "Call (206) 555-0112 about sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧.",
+     "reveal": true,
+     "expect": "Call (617) 555-0142 about sref:contact:4242424242424242abcd and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧."
+    },
+    {
+     "op": "restore",
+     "text": "Dial 2065550112 and keep sref:contact:AB2065550112CDEFGHJK and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧",
+     "expect": "Dial 6175550142 and keep sref:contact:AB2065550112CDEFGHJK and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+    },
+    {
+     "op": "stream",
+     "text": "Dial 2065550112 and keep sref:contact:AB2065550112CDEFGHJK and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+     "chunks": [
+      1,
+      2,
+      3,
+      5,
+      8,
+      13,
+      21,
+      34,
+      55
+     ],
+     "expect": "Dial 6175550142 and keep sref:contact:AB2065550112CDEFGHJK and ⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧ zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "ref": "sref:contact:AB2065550112CDEFGHJK",
+      "other": "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "args": {
+       "ref": "sref:contact:AB2065550112CDEFGHJK",
+       "other": "⟦sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0⟧"
+      }
+     }
+    },
+    {
+     "op": "resolve",
+     "args": {
+      "ref": "{{SREF_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com"
+     },
+     "expect": {
+      "refused": "unknown handle"
+     }
+    },
+    {
+     "op": "egress",
+     "payload": "{\"input\": \"use sref:contact:AB2065550112CDEFGHJK and \\u27e6sref:account:01JCK7KF9X4Y3M4N6Q6YB2D8P0\\u27e7\"}",
+     "expect": []
+    },
+    {
+     "op": "egress",
+     "payload": "{\"input\": \"use sref:contact:4242424242424242abcd and 4242 4242 4242 4242\"}",
+     "expect": [
+      "CARD"
+     ]
+    }
+   ]
   }
  ]
 }

@@ -28,7 +28,7 @@ NB = "(?<![A-Za-z0-9_])"
 NA = "(?![A-Za-z0-9_])"
 TAG = re.compile(r"\[([A-Z][A-Z0-9_]*)_([0-9]+)\]")
 # the tail of a text that could still grow into a sensitive reference (see handles.SREF)
-SREF_OPEN = re.compile(r"\u27e6?sref:(?:[A-Za-z0-9_-]{0,32}|[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{0,127})$")
+SREF_OPEN = re.compile(r"\u27e6?sref:(?:[A-Za-z0-9_-]{0,32}|[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{0,127})\Z")
 DIGIT_RUN = re.compile(r"(?<![0-9])\+?[0-9](?:[ .()-]{0,2}[0-9]){5,22}(?![0-9])")
 _DATE_REGEXES = None
 

@@ -1,0 +1,345 @@
+{
+ "description": "Checkpoints (spec 11.3): a head of the chain signed by a key the writer does not hold. Six release records, cut to `keep`, checked against the anchors listed. Expected results were worked out by hand.",
+ "private_key_seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+ "anchor_key_seed": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+ "other_key_seed": "0909090909090909090909090909090909090909090909090909090909090909",
+ "now": 1793836800,
+ "entries": [
+  {
+   "session": "s1",
+   "now": 1793836801,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:IcXCpgDOPBb4ouUjghN2Y_LvRszJoax8-TpRqKpetAQ",
+   "decision": "allow",
+   "authority": {
+    "kind": "binding"
+   }
+  },
+  {
+   "session": "s1",
+   "now": 1793836802,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:VOxZVHDdIKb29tuLTyovgzbPYI2EhcLWV4qkDvVeShw",
+   "decision": "deny",
+   "authority": {
+    "kind": "binding"
+   },
+   "code": "wrong_site",
+   "reason": "bound to a different site"
+  },
+  {
+   "session": "s1",
+   "now": 1793836803,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:xzctJTK2XbK86dUw4f8NKFe4j0cYzul-qLeG7ljPOdE",
+   "decision": "allow",
+   "authority": {
+    "kind": "binding"
+   }
+  },
+  {
+   "session": "s1",
+   "now": 1793836804,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:zjwzL8O4GCm2RqvRVdZo6HQ_36EnVi9Yx6t_YwPXWw8",
+   "decision": "allow",
+   "authority": {
+    "kind": "binding"
+   }
+  },
+  {
+   "session": "s1",
+   "now": 1793836805,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:Ly7JLney9-Zx9JRdP50Y8GZ34FrSw4oRHze7nBDmjIk",
+   "decision": "deny",
+   "authority": {
+    "kind": "binding"
+   },
+   "code": "used_up",
+   "reason": "already used"
+  },
+  {
+   "session": "s1",
+   "now": 1793836806,
+   "handle": "{{OTP_1}}",
+   "data": "OTP",
+   "source": "acme.com",
+   "sink": {
+    "tool": "type",
+    "site": "acme.com"
+   },
+   "call": "sha-256:Ek5IaoIQaOoBGfhL-3l2PxjXjb-TUjiRcxJ2bPxJ1rk",
+   "decision": "allow",
+   "authority": {
+    "kind": "binding"
+   }
+  }
+ ],
+ "tokens": [
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6SWNYQ3BnRE9QQmI0b3VVamdoTjJZX0x2UnN6Sm9heDgtVHBScUtwZXRBUSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAxLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSJ9.N0TUpKpl5lyBxHadTu4IJ6neqGpI2eo8BHCpm7yfJbUONIRbC8vaXxfK5-t5Z6GPuHLbBaiaX3g0-5zJNakWAg",
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6Vk94WlZIRGRJS2IyOXR1TFR5b3ZnemJQWUkyRWhjTFdWNHFrRHZWZVNodyIsImNvZGUiOiJ3cm9uZ19zaXRlIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMiwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2Ijoic2hhLTI1NjpTUkM3MFBQbWVTdWlSaERxMEN2cC0ySHpMWjNEV3I2MWxHSE80V3JIczgwIiwicmVhc29uIjoiYm91bmQgdG8gYSBkaWZmZXJlbnQgc2l0ZSIsInNlcSI6Miwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoiYWNtZS5jb20iLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIn0.SGhS2QBjRKIwvg7fJFk64j8teW6FIkQnnTUFSt3yishrCtmc__X2z6GuFDbT5UFIEHVo6ySPeqtXe9GKKaEmBA",
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6eHpjdEpUSzJYYks4NmRVdzRmOE5LRmU0ajBjWXp1bC1xTGVHN2xqUE9kRSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAzLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpCbWd3T05zcE15cEt6Rm5YaHladU0wQkg3VWFPLXVMUVR1clBkSEJYOFA0Iiwic2VxIjozLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UifQ.1CneeHPWByNwT6fln4qJ70BRp58Crqx1w5Ch9BtZN2f9lhKx_V1GeW2IUEzGgtYRgSwtnmN2MaJZlvc-_Z2MBA",
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6emp3ekw4TzRHQ20yUnF2UlZkWm82SFFfMzZFblZpOVl4NnRfWXdQWFd3OCIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODA0LCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpfVV8zbFlPeExmUDZCTm5jRWtQMUhBRm0zM2RITzFpREZJU0tMdXd0N3hRIiwic2VxIjo0LCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UifQ.08mNyxkATyM7TdehFbiG_YbLngh6x3LgqYYHaZ_Smq1nRdFo1biCl6pnsAjw2d-X4MdQzEnoriuRIJFmtjB5Dw",
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6THk3SkxuZXk5LVp4OUpSZFA1MFk4R1ozNEZyU3c0b1JIemU3bkJEbWpJayIsImNvZGUiOiJ1c2VkX3VwIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwNSwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2Ijoic2hhLTI1NjpTRFNxUWhNb2RNcDlLb214Z01abFRtZ2hBSDRPaWs5RF9IbnZxb0tONUY0IiwicmVhc29uIjoiYWxyZWFkeSB1c2VkIiwic2VxIjo1LCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UifQ.Ux0-THATukOun-DPIjQZzZGWKXlK6UQoAzmFbIzOUTbKT4wd9LRTkD2ogb8NSmEtgh_8Yvd3L3hFU2gWo-m5BA",
+  "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6RWs1SWFvSVFhT29CR2ZoTC0zbDJQeGpYamItVFVqaVJjeEoyYlB4SjFyayIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODA2LCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjpCeWF1WkRQblN1Y3ppbzFuNGN3NTI0N1NtRk1Da0JMSmxXdWdQenNUcWJrIiwic2VxIjo2LCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UifQ.oYcWFmEeaf81RbTTf9IWHYfW_xobq6xpPxBz2Mnz4WZtBaXhlvDVHXIfUuPQYo_kys51vuFEarkINcNf7p9oCQ"
+ ],
+ "cases": [
+  {
+   "name": "6 records cut to 4, no anchor",
+   "keep": 4,
+   "anchors": [],
+   "expect": {
+    "receipts": 4,
+    "problems": [],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": []
+  },
+  {
+   "name": "6 records cut to 4, anchor at 6",
+   "keep": 4,
+   "anchors": [
+    {
+     "seq": 6
+    }
+   ],
+   "expect": {
+    "receipts": 4,
+    "problems": [
+     "anchor at seq 6: the log was cut off after seq 4"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
+   ]
+  },
+  {
+   "name": "6 records cut to 4, anchor at 3",
+   "keep": 4,
+   "anchors": [
+    {
+     "seq": 3
+    }
+   ],
+   "expect": {
+    "receipts": 4,
+    "problems": [],
+    "proven_to": 3,
+    "status": "prefix",
+    "reason": "unanchored_tail"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpfVV8zbFlPeExmUDZCTm5jRWtQMUhBRm0zM2RITzFpREZJU0tMdXd0N3hRIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjMsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.lbzTs350ADy8CX8ZI8_aae-TRo0iWo8z2G3tZLaHsvdMGgOqiq7vsBnneTEJQSVV8bxDCE441caF20BMWKC6BA"
+   ]
+  },
+  {
+   "name": "6 records cut to 4, anchors at 3 and 4",
+   "keep": 4,
+   "anchors": [
+    {
+     "seq": 3
+    },
+    {
+     "seq": 4
+    }
+   ],
+   "expect": {
+    "receipts": 4,
+    "problems": [],
+    "proven_to": 4,
+    "status": "complete",
+    "reason": null
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpfVV8zbFlPeExmUDZCTm5jRWtQMUhBRm0zM2RITzFpREZJU0tMdXd0N3hRIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjMsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.lbzTs350ADy8CX8ZI8_aae-TRo0iWo8z2G3tZLaHsvdMGgOqiq7vsBnneTEJQSVV8bxDCE441caF20BMWKC6BA",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpTRFNxUWhNb2RNcDlLb214Z01abFRtZ2hBSDRPaWs5RF9IbnZxb0tONUY0IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjQsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0._fh1mlZ2RutvzpbBrTPeWUnYHeWdN5z5JydEBm-Ra9R4oqiqPEKdrPaM_vVGIbdyjMFGb80KgHQU3CuiJkQDAw"
+   ]
+  },
+  {
+   "name": "all 6 records, anchor at 6",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 6
+    }
+   ],
+   "expect": {
+    "receipts": 6,
+    "problems": [],
+    "proven_to": 6,
+    "status": "complete",
+    "reason": null
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
+   ]
+  },
+  {
+   "name": "all 6 records, anchor at 6 and a bad one at 3",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 3,
+     "head": "other"
+    },
+    {
+     "seq": 6
+    }
+   ],
+   "expect": {
+    "receipts": 6,
+    "problems": [
+     "anchor at seq 3: head does not match receipt 3: the log was changed or replaced"
+    ],
+    "proven_to": 6,
+    "status": "complete",
+    "reason": null
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1Njp6X2gxdEc3ZjRkOTNIVnhwd01RcFlIQVkwQUJ2d1otM0xJb2kyWVlXYkdBIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjMsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.M3xlaXLLHQ6fk1EJEf1s1PudnedWeNL0BADNFIKdPOUnYOKQhjfy-38Ztq_ZJZHUuyEAMJJZTgcxvbNqPRevDg",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
+   ]
+  },
+  {
+   "name": "an anchor signed by the writer's own key",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 6,
+     "signer": "writer"
+    }
+   ],
+   "anchor_key": "writer",
+   "expect": {
+    "receipts": 6,
+    "problems": [
+     "the anchor key is the key that signs the log: a checkpoint must come from a key the writer does not hold"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.NqVGzerjSSQp1EeFPml8umxOHjFVLhV5yDQ9aZpl3Z-Hnp0TJ8s5BpYYP6I6QoklhVNcKAu8PMH-H7RKfRLdBg"
+   ]
+  },
+  {
+   "name": "an anchor from a key we were not given",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 6,
+     "signer": "other"
+    }
+   ],
+   "expect": {
+    "receipts": 6,
+    "problems": [
+     "anchor 1: unknown key"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6YXRaUjYzdE5HM1cyR2hQcFZsZUtuZnJ3MU43TjZMQXFPZTVnckUyU0JSNCIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.Lr8dIRl5BkK9eW74w0WTyTGOMI5lkDVkG-4ukgEBx0_s4C3JNigLgVYAoGog0Huv-GMOArvDTWS0G33sCntAAg"
+   ]
+  },
+  {
+   "name": "an anchor for another session",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 6,
+     "session": "s2"
+    }
+   ],
+   "expect": {
+    "receipts": 6,
+    "problems": [
+     "anchor 1: belongs to another session"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMiIsInR5cGUiOiJjaGVja3BvaW50In0.aHVsIJUVPAZDSLKT0-hlqdsCdNvBNISCpREKeIym14PGmHNLJbvDqg-ZHZSh8omf_9jSw3ww2XmNqr_JZZOIAA"
+   ]
+  },
+  {
+   "name": "anchors but no key to check them with",
+   "keep": 6,
+   "anchors": [
+    {
+     "seq": 6
+    }
+   ],
+   "anchor_key": null,
+   "expect": {
+    "receipts": 6,
+    "problems": [
+     "anchors were given without an anchor_key to check them with"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6QWtYSVpGem9uYjU5Wm1Hd3lLZ2kzSDNCd01pNmFtZXZxZEtRaUxaaGR0YyIsInR5cCI6Im9wbi1jaGVja3BvaW50K2p3cyJ9.eyJoZWFkIjoic2hhLTI1NjpibDhLaFRhczFEelN1bVpmWVUyUXZEcnN1MUhnMzJ4ZTZXX2NycUpzZ28wIiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJzZXEiOjYsInNlc3Npb24iOiJzMSIsInR5cGUiOiJjaGVja3BvaW50In0.J0Jzd2oqzFMooCqCHxsC0yzp39zZniEKvW4HPZlJkQnmtLFM22Wcuif7dwJNvkAlfRpEfmBG9d839EbFiqQVDg"
+   ]
+  },
+  {
+   "name": "a cut is still caught by a count the verifier kept",
+   "keep": 4,
+   "anchors": [],
+   "expect_count": 6,
+   "expect": {
+    "receipts": 4,
+    "problems": [
+     "expected 6 receipt(s), found 4: the log was cut or added to"
+    ],
+    "proven_to": null,
+    "status": "prefix",
+    "reason": "no_anchor"
+   },
+   "anchor_tokens": []
+  }
+ ]
+}

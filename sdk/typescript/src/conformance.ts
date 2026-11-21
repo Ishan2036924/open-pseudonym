@@ -3,13 +3,15 @@
 // Exit code 0 means every vector passed. Each failure prints the file, the case and what differed.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import * as checks from "./checks.ts";
 import { Drbg } from "./drbg.ts";
+import { EgressLog, makeCheckpoint, releaseBody, verifyLog, type ReleaseEntry } from "./egress.ts";
 import { FF1 } from "./fpe.ts";
-import { HandleRefused, Sink, Source } from "./handles.ts";
+import { HandleRefused, Sink, Source, type Approval } from "./handles.ts";
 import { canonical, digest } from "./jcs.ts";
 import { Signer, verify } from "./jws.ts";
 import { PolicyError, loadProfile } from "./policy.ts";
@@ -51,6 +53,8 @@ class Runner {
     this.policy(this.load("policy"));
     this.scenarios(this.load("scenarios"));
     this.receipts(this.load("receipts"));
+    this.releases(this.load("releases"));
+    this.checkpoints(this.load("checkpoints"));
     return { passed: this.passed, failed: this.failed };
   }
 
@@ -127,6 +131,34 @@ class Runner {
     }
   }
 
+  releases(doc: any): void {
+    this.ok(signer("writer").kid === doc.kid, "releases kid");
+    for (const c of doc.cases) {
+      const where = `release case ${JSON.stringify(c.name)}`;
+      const got = withTempDir((dir) => runReleaseCase(c, dir));
+      this.ok(isDeepStrictEqual(got.results, c.results), where + " results", JSON.stringify(got.results).slice(0, 300));
+      this.ok(isDeepStrictEqual(got.records, c.records), where + " records", JSON.stringify(got.records).slice(0, 300));
+      this.ok(isDeepStrictEqual(got.tokens, c.tokens), where + " tokens");
+      this.ok(got.problems.length === 0, where + " verify", got.problems.join("; "));
+      const text = got.records.map((r) => canonical(r).toString("utf-8")).join("\n");
+      this.ok(!c.never_in_records.some((n: string) => text.includes(n)), where + " holds no value or hash");
+    }
+    for (const c of doc.shapes) {
+      const got = withTempDir((dir) => runShapeCase(c, dir));
+      this.ok(isDeepStrictEqual(got, c.problems), `release shape ${JSON.stringify(c.name)}`, JSON.stringify(got).slice(0, 300));
+    }
+  }
+
+  checkpoints(doc: any): void {
+    for (const c of doc.cases) {
+      const got = withTempDir((dir) => runCheckpointCase(doc, c, dir));
+      const where = `checkpoint case ${JSON.stringify(c.name)}`;
+      this.ok(isDeepStrictEqual(got.full, doc.tokens), where + " log tokens");
+      this.ok(isDeepStrictEqual(got.tokens, c.anchor_tokens), where + " anchor tokens");
+      this.ok(isDeepStrictEqual(got.result, c.expect), where, JSON.stringify(got.result).slice(0, 300));
+    }
+  }
+
   receipts(doc: any): void {
     const signer = Signer.fromSeed(hex(doc.private_key_seed));
     this.ok(signer.kid === doc.kid, "receipts kid");
@@ -135,6 +167,96 @@ class Runner {
     this.ok(isDeepStrictEqual(verify(doc.token, signer.publicKey, "opn-egress+jws"), doc.body), "receipts verify");
     this.ok(digest(Buffer.from("hello")) === doc.payload_digest_of_hello, "receipts digest");
   }
+}
+
+const SEEDS: Record<string, Buffer> = {
+  writer: Buffer.from(Array.from({ length: 32 }, (_, i) => i)),
+  anchor: Buffer.from(Array.from({ length: 32 }, (_, i) => 32 + i)),
+  other: Buffer.alloc(32, 9),
+};
+const signer = (name: string): Signer => Signer.fromSeed(SEEDS[name]);
+
+function withTempDir<T>(fn: (dir: string) => T): T {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "opn-vec-"));
+  try {
+    return fn(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const readLines = (dir: string): string[] =>
+  fs.readFileSync(path.join(dir, "receipts.jsonl"), "utf-8").split("\n").filter((l) => l.trim() !== "");
+
+/** Plays one release case through the SDK; the twin of run_release_case in the Python runner. */
+function runReleaseCase(c: any, dir: string) {
+  let now = c.now as number;
+  const spec = c.approve;
+  const approve = spec === null ? undefined : () => (typeof spec === "boolean" ? spec : (spec as Approval));
+  const writer = signer("writer");
+  const s = new Session(c.profile, {
+    vault: new Vault(hex(c.seed), c.now), clock: () => now, approve, sessionId: "s1",
+    releaseLog: new EgressLog(dir, writer, false),
+  });
+  if (c.mask) s.mask(c.mask.text, c.mask.source ? new Source(c.mask.source) : null);
+  const results: unknown[] = [];
+  for (const st of c.steps) {
+    if (st.at !== undefined) now = st.at;
+    if (st.op === "break_log") {
+      fs.mkdirSync(path.join(dir, "receipts.jsonl")); // appending to a folder fails
+      continue;
+    }
+    if (st.op === "fix_log") {
+      fs.rmdirSync(path.join(dir, "receipts.jsonl"));
+      continue;
+    }
+    try {
+      results.push({ args: s.resolveArgs(st.args, new Sink(st.sink)).args });
+    } catch (exc) {
+      if (!(exc instanceof HandleRefused)) throw exc;
+      results.push({ refused: exc.reason, code: exc.code });
+    }
+  }
+  const tokens = readLines(dir);
+  const records = tokens.map((t) => verify(t, writer.publicKey, "opn-release+jws"));
+  return { results, records, tokens, problems: verifyLog(dir, writer.publicKey, s.vault).problems };
+}
+
+/** Signs a release record changed the way `c` says and returns what verifyLog reports about it. */
+function runShapeCase(c: any, dir: string): string[] {
+  const writer = signer("writer");
+  const body = releaseBody(c.entry as ReleaseEntry, 1, null);
+  for (const [k, v] of Object.entries(c.set ?? {})) body[k] = v;
+  for (const k of c.delete ?? []) delete body[k];
+  fs.writeFileSync(path.join(dir, "receipts.jsonl"), writer.sign(body, "opn-release+jws") + "\n");
+  let vault: Vault | null = null;
+  if (c.mask) {
+    const s = new Session(c.profile, { vault: new Vault(hex(c.seed), c.now), clock: () => c.now });
+    s.mask(c.mask);
+    vault = s.vault;
+  }
+  return verifyLog(dir, writer.publicKey, vault).problems;
+}
+
+/** Writes the log in `doc`, cuts it to `keep` records, signs the case's checkpoints and verifies the log. */
+function runCheckpointCase(doc: any, c: any, dir: string) {
+  const writer = signer("writer");
+  const log = new EgressLog(dir, writer, false);
+  for (const e of doc.entries) log.recordRelease(e as ReleaseEntry);
+  const full = readLines(dir);
+  fs.writeFileSync(path.join(dir, "receipts.jsonl"), full.slice(0, c.keep).map((l) => l + "\n").join(""));
+  const tokens = c.anchors.map((a: any) => {
+    const head = a.head === "other" ? digest(Buffer.from("another log")) : digest(Buffer.from(full[a.seq - 1], "ascii"));
+    return makeCheckpoint(signer(a.signer ?? "anchor"), { session: a.session ?? "s1", seq: a.seq, head, now: doc.now });
+  });
+  const key = "anchor_key" in c ? c.anchor_key : "anchor";
+  const r = verifyLog(dir, writer.publicKey, null, {
+    anchors: tokens, anchorKey: key ? signer(key).publicKey : null, expectCount: c.expect_count ?? null,
+  });
+  return {
+    full, tokens,
+    result: { receipts: r.receipts, problems: r.problems, proven_to: r.provenTo, status: r.status, reason: r.reason },
+  };
 }
 
 function step(s: Session, st: any): unknown {

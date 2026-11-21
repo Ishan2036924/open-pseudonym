@@ -6,13 +6,16 @@ Exit code 0 means every vector passed. Each failure prints the file, the case an
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 from . import checks
 from .drbg import Drbg
+from .egress import EgressLog, make_checkpoint, release_body, verify_log
 from .fpe import FF1
-from .handles import HandleRefused, Sink, Source
+from .handles import Approval, HandleRefused, Sink, Source
 from .jcs import canonical, digest
 from .jws import Signer, verify
 from .policy import PolicyError, load_profile
@@ -38,7 +41,7 @@ class Runner:
         return json.loads((self.folder / f"{name}.json").read_text(encoding="utf-8"))
 
     def run(self) -> int:
-        for name in ("checks", "drbg", "ff1", "detect", "policy", "scenarios", "receipts"):
+        for name in ("checks", "drbg", "ff1", "detect", "policy", "scenarios", "receipts", "releases", "checkpoints"):
             getattr(self, name)(self.load(name))
         for f in self.failed:
             print("FAIL", f)
@@ -130,6 +133,33 @@ class Runner:
             return {"messages": msgs, "notes": notes}
         raise ValueError(op)
 
+    def releases(self, doc):
+        writer = _signer("writer")
+        self.ok(writer.kid == doc["kid"], "releases kid")
+        for case in doc["cases"]:
+            where = f"release case {case['name']!r}"
+            with tempfile.TemporaryDirectory() as tmp:
+                got = run_release_case(case, Path(tmp))
+            self.ok(got["results"] == case["results"], where + " results", json.dumps(got["results"])[:300])
+            self.ok(got["records"] == case["records"], where + " records", json.dumps(got["records"])[:300])
+            self.ok(got["tokens"] == case["tokens"], where + " tokens")
+            self.ok(got["report"]["problems"] == [], where + " verify", str(got["report"]["problems"]))
+            text = "\n".join(canonical(r).decode() for r in got["records"])
+            self.ok(not any(n in text for n in case["never_in_records"]), where + " holds no value or hash")
+        for case in doc["shapes"]:
+            with tempfile.TemporaryDirectory() as tmp:
+                got = run_shape_case(case, Path(tmp))
+            self.ok(got == case["problems"], f"release shape {case['name']!r}", json.dumps(got)[:300])
+
+    def checkpoints(self, doc):
+        for case in doc["cases"]:
+            with tempfile.TemporaryDirectory() as tmp:
+                got = run_checkpoint_case(doc, case, Path(tmp))
+            where = f"checkpoint case {case['name']!r}"
+            self.ok(got["full"] == doc["tokens"], where + " log tokens")
+            self.ok(got["tokens"] == case["anchor_tokens"], where + " anchor tokens")
+            self.ok(got["result"] == case["expect"], where, json.dumps(got["result"])[:300])
+
     def receipts(self, doc):
         signer = Signer.from_seed(bytes.fromhex(doc["private_key_seed"]))
         self.ok(signer.kid == doc["kid"], "receipts kid")
@@ -137,6 +167,89 @@ class Runner:
         self.ok(signer.sign(doc["body"], "opn-egress+jws") == doc["token"], "receipts token")
         self.ok(verify(doc["token"], signer.public_key, "opn-egress+jws") == doc["body"], "receipts verify")
         self.ok(digest(b"hello") == doc["payload_digest_of_hello"], "receipts digest")
+
+
+WRITER_SEED = bytes(range(32))
+ANCHOR_SEED = bytes(range(32, 64))
+OTHER_SEED = bytes([9] * 32)
+
+
+def _signer(name: str) -> Signer:
+    return Signer.from_seed({"writer": WRITER_SEED, "anchor": ANCHOR_SEED, "other": OTHER_SEED}[name])
+
+
+def read_lines(folder: Path) -> list[str]:
+    return [ln for ln in (folder / "receipts.jsonl").read_text().splitlines() if ln.strip()]
+
+
+def run_release_case(case: dict, folder: Path) -> dict:
+    """Plays one release case through the SDK: a session with a release log in `folder`, then each step. Returns what
+    each step gave, the signed records read back from the log, their tokens and the verify_log report."""
+    now = [case["now"]]
+    spec = case.get("approve")
+    approve = None if spec is None else (lambda *_: Approval(**spec) if isinstance(spec, dict) else spec)
+    writer = _signer("writer")
+    s = Session(case["profile"], Vault(seed=bytes.fromhex(case["seed"]), created=case["now"]), clock=lambda: now[0],
+                approve=approve, session_id="s1", release_log=EgressLog(folder, writer, store_payloads=False))
+    if case.get("mask"):
+        src = case["mask"].get("source")
+        s.mask(case["mask"]["text"], Source(**src) if src else None)
+    results = []
+    for st in case["steps"]:
+        if "at" in st:
+            now[0] = st["at"]
+        if st.get("op") == "break_log":
+            os.mkdir(folder / "receipts.jsonl")  # appending to a folder fails
+            continue
+        if st.get("op") == "fix_log":
+            os.rmdir(folder / "receipts.jsonl")
+            continue
+        try:
+            results.append({"args": s.resolve_args(st["args"], Sink(**st["sink"])).args})
+        except HandleRefused as exc:
+            results.append({"refused": exc.reason, "code": exc.code})
+    tokens = read_lines(folder)
+    records = [verify(t, writer.public_key, "opn-release+jws") for t in tokens]
+    return {"results": results, "records": records, "tokens": tokens,
+            "report": verify_log(folder, writer.public_key, s.vault)}
+
+
+def run_shape_case(case: dict, folder: Path) -> list[str]:
+    """Signs a release record changed the way `case` says and returns what verify_log reports about it."""
+    writer = _signer("writer")
+    body = release_body(case["entry"], 1, None)
+    for k, v in case.get("set", {}).items():
+        body[k] = v
+    for k in case.get("delete", []):
+        del body[k]
+    (folder / "receipts.jsonl").write_text(writer.sign(body, "opn-release+jws") + "\n")
+    vault = None
+    if case.get("mask"):
+        s = Session(case["profile"], Vault(seed=bytes.fromhex(case["seed"]), created=case["now"]),
+                    clock=lambda: case["now"])
+        s.mask(case["mask"])
+        vault = s.vault
+    return verify_log(folder, writer.public_key, vault)["problems"]
+
+
+def run_checkpoint_case(doc: dict, case: dict, folder: Path) -> dict:
+    """Writes the log in `doc`, cuts it to `keep` records, signs the case's checkpoints and verifies the log."""
+    writer = _signer("writer")
+    log = EgressLog(folder, writer, store_payloads=False)
+    for e in doc["entries"]:
+        log.record_release(**e)
+    full = read_lines(folder)
+    (folder / "receipts.jsonl").write_text("".join(ln + "\n" for ln in full[:case["keep"]]))
+    tokens = []
+    for a in case["anchors"]:
+        head = digest(b"another log") if a.get("head") == "other" else digest(full[a["seq"] - 1].encode("ascii"))
+        tokens.append(make_checkpoint(_signer(a.get("signer", "anchor")), session=a.get("session", "s1"),
+                                      seq=a["seq"], head=head, now=doc["now"]))
+    key = case.get("anchor_key", "anchor")
+    report = verify_log(folder, writer.public_key, anchors=tokens, anchor_key=_signer(key).public_key if key else None,
+                        expect_count=case.get("expect_count"))
+    return {"full": full, "tokens": tokens,
+            "result": {k: report[k] for k in ("receipts", "problems", "proven_to", "status", "reason")}}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -242,7 +242,7 @@ class Session:
                 stand[span] = self._stand_in(span, text, source)
             # what we just learned (a name, its parts) may appear elsewhere in this same text without a cue,
             # like a sign-off "Dana" under "From: Dana Reyes"; look once more for known values only
-            todo = [sp for sp in grow_names(resolve(self._known_detector().detect(text)), text)
+            todo = [sp for sp in _outside_srefs(grow_names(resolve(self._known_detector().detect(text)), text), text)
                     if not any(sp.start < o.end and o.start < sp.end for o in spans)
                     and sp.text.lower() not in self.allow and not self._is_ours(sp.text)]
             if not todo:

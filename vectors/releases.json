@@ -1,0 +1,1064 @@
+{
+ "description": "Release records (spec 10.4): who allowed each secret release, written before the value is filled. Records and tokens are exact (Ed25519 is deterministic); the expected records were worked out by hand from the spec. `never_in_records` lists the real values and their digests that must appear nowhere in a record.",
+ "private_key_seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+ "kid": "sha-256:1IG2tMH7J2wbJZnOf8LJzQitKf7LMvoAElsuDMVM54Y",
+ "cases": [
+  {
+   "name": "allowed by the binding, then used up",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://evil.example"
+     }
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "bound to a different site",
+     "code": "wrong_site"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "482913"
+     }
+    },
+    {
+     "refused": "already used",
+     "code": "used_up"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "evil.example"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "wrong_site",
+     "reason": "bound to a different site",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 1
+    },
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 2,
+     "prev": "sha-256:1ppl5Q0c4t1D_oAnj8jBd5Vaxx6zsz_vaA20CIrejic",
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 0
+    },
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 3,
+     "prev": "sha-256:MQAZ_IWiJGyCm9Sk0rlhNUyRQ7zpSqTddSu1NFr2mN4",
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "used_up",
+     "reason": "already used",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 0
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ3cm9uZ19zaXRlIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJib3VuZCB0byBhIGRpZmZlcmVudCBzaXRlIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJldmlsLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJhY21lLmNvbSIsInR5cGUiOiJyZWxlYXNlIiwidXNlc19sZWZ0IjoxfQ.9FY8HvYog6-3ijFOW2Fa2clJgR3kJBi9b4pW6DZODIm7xiAwlOmxBk8dwlCtL8WrV-VcwNh8uz1jYlli2UbCDg",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2Ijoic2hhLTI1NjoxcHBsNVEwYzR0MURfb0FuajhqQmQ1VmF4eDZ6c3pfdmFBMjBDSXJlamljIiwic2VxIjoyLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.G0OLbzL3S1sanmau1cMXdOMF7kk2nUqMWt6obqBcc9eVT5YE7iFe0NvDjuQ54gvIn-odvtZQnUuPD_iojOK8AA",
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ1c2VkX3VwIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2Ijoic2hhLTI1NjpNUUFaX0lXaUpHeUNtOVNrMHJsaE5VeVJRN3pwU3FUZGRTdTFORnIybU40IiwicmVhc29uIjoiYWxyZWFkeSB1c2VkIiwic2VxIjozLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjB9.6ialkZNQavp-lE9GnfeXNIhzCC0V1_fBT0GuCgY14kdN-B3v3_txSs7tMxQ2Nxlq-Op8av_nSSLbI8Y7U3eYCg"
+   ]
+  },
+  {
+   "name": "an unknown handle, a wrong tool and no binding",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "t": "{{OTP_9}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "unknown handle",
+     "code": "unknown_handle"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_9}}",
+     "data": null,
+     "source": null,
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:e1FNp3FKhkYXKlK9VzlxAD8JcJfYPOgVgKC5oX9VT7U",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "unknown_handle",
+     "reason": "unknown handle",
+     "authority": {
+      "kind": "binding"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6ZTFGTnAzRktoa1lYS2xLOVZ6bHhBRDhKY0pmWVBPZ1ZnS0M1b1g5VlQ3VSIsImNvZGUiOiJ1bmtub3duX2hhbmRsZSIsImRhdGEiOm51bGwsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzl9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJ1bmtub3duIGhhbmRsZSIsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoiYWNtZS5jb20iLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOm51bGwsInR5cGUiOiJyZWxlYXNlIn0.ka-8ZWMPMzctRJW93JGg2OQ99gsX2nzsGQ9CVq8quytwoX1CEt3tOVxU8tMRfr21dfrvvVXMv7OLevNYx5P-AA"
+   ]
+  },
+  {
+   "name": "allowed by a person, who is on record with what they were shown",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Pay with card 4242 4242 4242 4242 on the checkout page.",
+    "source": {
+     "site": "https://shop.example"
+    }
+   },
+   "approve": {
+    "allowed": true,
+    "by": "mia",
+    "channel": "app"
+   },
+   "steps": [
+    {
+     "args": {
+      "card": "{{CARD_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://shop.example/pay"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "args": {
+      "card": "4242 4242 4242 4242"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{CARD_1}}",
+     "data": "CARD",
+     "source": "shop.example",
+     "sink": {
+      "tool": "type",
+      "site": "shop.example"
+     },
+     "call": "sha-256:oeSFbqslv_xtVasgpe2BUfjVswr05Avvg4EaIH3h-ZA",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "person",
+      "by": "mia",
+      "channel": "app",
+      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJjaGFubmVsIjoiYXBwIiwia2luZCI6InBlcnNvbiIsInNob3duIjoic2hhLTI1Njo1V0tKcFBEcXN1R25Pa1ZKYms5MzhmQzNzRjRFMGtKcU91bHpEV0otRUp3In0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.WdPaRbfef_K9IyxgRgCWBW4L-kIgrP8IrIBjqEQp8H8UanRnPPZ2RcNAgx1xaiXZ1ERRJsEgoEktcHfA-uH0DQ"
+   ]
+  },
+  {
+   "name": "allowed by an OAC consent",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Pay with card 4242 4242 4242 4242 on the checkout page.",
+    "source": {
+     "site": "https://shop.example"
+    }
+   },
+   "approve": {
+    "allowed": true,
+    "ref": "jti-7f3a",
+    "digest": "sha-256:IMiKVmV_MR_4rgUosxGKee7lbrhCs4OuIPVxgC32lzo"
+   },
+   "steps": [
+    {
+     "args": {
+      "card": "{{CARD_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://shop.example/pay"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "args": {
+      "card": "4242 4242 4242 4242"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{CARD_1}}",
+     "data": "CARD",
+     "source": "shop.example",
+     "sink": {
+      "tool": "type",
+      "site": "shop.example"
+     },
+     "call": "sha-256:oeSFbqslv_xtVasgpe2BUfjVswr05Avvg4EaIH3h-ZA",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "consent",
+      "ref": "jti-7f3a",
+      "digest": "sha-256:IMiKVmV_MR_4rgUosxGKee7lbrhCs4OuIPVxgC32lzo",
+      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiZGlnZXN0Ijoic2hhLTI1NjpJTWlLVm1WX01SXzRyZ1Vvc3hHS2VlN2xicmhDczRPdUlQVnhnQzMybHpvIiwia2luZCI6ImNvbnNlbnQiLCJyZWYiOiJqdGktN2YzYSIsInNob3duIjoic2hhLTI1Njo1V0tKcFBEcXN1R25Pa1ZKYms5MzhmQzNzRjRFMGtKcU91bHpEV0otRUp3In0sImNhbGwiOiJzaGEtMjU2Om9lU0ZicXNsdl94dFZhc2dwZTJCVWZqVnN3cjA1QXZ2ZzRFYUlIM2gtWkEiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiYWxsb3ciLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6InNob3AuZXhhbXBsZSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6InNob3AuZXhhbXBsZSIsInR5cGUiOiJyZWxlYXNlIn0.Pup_2LCYW_LVVagY74yx08XH_apIC5iwUWAlmFkwoTgkEeatuoEynIWyvBQb1igdrposAEqQViePEkqbxwgGDA"
+   ]
+  },
+  {
+   "name": "a person says no",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Pay with card 4242 4242 4242 4242 on the checkout page.",
+    "source": {
+     "site": "https://shop.example"
+    }
+   },
+   "approve": {
+    "allowed": false,
+    "by": "mia"
+   },
+   "steps": [
+    {
+     "args": {
+      "card": "{{CARD_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://shop.example/pay"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "not approved",
+     "code": "not_approved"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{CARD_1}}",
+     "data": "CARD",
+     "source": "shop.example",
+     "sink": {
+      "tool": "type",
+      "site": "shop.example"
+     },
+     "call": "sha-256:oeSFbqslv_xtVasgpe2BUfjVswr05Avvg4EaIH3h-ZA",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "not_approved",
+     "reason": "not approved",
+     "authority": {
+      "kind": "person",
+      "by": "mia",
+      "shown": "sha-256:5WKJpPDqsuGnOkVJbk938fC3sF4E0kJqOulzDWJ-EJw"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsiYnkiOiJtaWEiLCJraW5kIjoicGVyc29uIiwic2hvd24iOiJzaGEtMjU2OjVXS0pwUERxc3VHbk9rVkpiazkzOGZDM3NGNEUwa0pxT3VsekRXSi1FSncifSwiY2FsbCI6InNoYS0yNTY6b2VTRmJxc2x2X3h0VmFzZ3BlMkJVZmpWc3dyMDVBdnZnNEVhSUgzaC1aQSIsImNvZGUiOiJub3RfYXBwcm92ZWQiLCJkYXRhIjoiQ0FSRCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7Q0FSRF8xfX0iLCJpYXQiOjE3OTM4MzY4MDAsIm9wbiI6IjAuMSIsIm91dGNvbWUiOiJyZWZ1c2VkIiwicHJldiI6bnVsbCwicmVhc29uIjoibm90IGFwcHJvdmVkIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJzaG9wLmV4YW1wbGUiLCJ0b29sIjoidHlwZSJ9LCJzb3VyY2UiOiJzaG9wLmV4YW1wbGUiLCJ0eXBlIjoicmVsZWFzZSJ9.EaFxI_PMQzs_6XacbmyjwB_HYGO0JKTYxcj7-08ssN3SQY4kTEDYR-ZXQcPW7C8o9r_pRhheTNJeztr15irVBQ"
+   ]
+  },
+  {
+   "name": "a rule asks and nobody is there to ask",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Pay with card 4242 4242 4242 4242 on the checkout page.",
+    "source": {
+     "site": "https://shop.example"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "card": "{{CARD_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://shop.example/pay"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "needs the person's approval",
+     "code": "needs_approval"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{CARD_1}}",
+     "data": "CARD",
+     "source": "shop.example",
+     "sink": {
+      "tool": "type",
+      "site": "shop.example"
+     },
+     "call": "sha-256:oeSFbqslv_xtVasgpe2BUfjVswr05Avvg4EaIH3h-ZA",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "needs_approval",
+     "reason": "needs the person's approval",
+     "authority": {
+      "kind": "policy"
+     }
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6InBvbGljeSJ9LCJjYWxsIjoic2hhLTI1NjpvZVNGYnFzbHZfeHRWYXNncGUyQlVmalZzd3IwNUF2dmc0RWFJSDNoLVpBIiwiY29kZSI6Im5lZWRzX2FwcHJvdmFsIiwiZGF0YSI6IkNBUkQiLCJkZWNpc2lvbiI6ImRlbnkiLCJoYW5kbGUiOiJ7e0NBUkRfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVmdXNlZCIsInByZXYiOm51bGwsInJlYXNvbiI6Im5lZWRzIHRoZSBwZXJzb24ncyBhcHByb3ZhbCIsInNlcSI6MSwic2Vzc2lvbiI6InMxIiwic2luayI6eyJzaXRlIjoic2hvcC5leGFtcGxlIiwidG9vbCI6InR5cGUifSwic291cmNlIjoic2hvcC5leGFtcGxlIiwidHlwZSI6InJlbGVhc2UifQ.cN8RU14-3C4lE1zTiHuHPkhwpu1K7Ydiq10nz31cbUYMQ_T0O1SV6HCPfbmTqb6tMv1W4D4N3hH4t0xeRaryAg"
+   ]
+  },
+  {
+   "name": "expired",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     },
+     "at": 1793837400
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "expired",
+     "code": "expired"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793837400,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "expired",
+     "reason": "expired",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 1
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJleHBpcmVkIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNzQwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJleHBpcmVkIiwic2VxIjoxLCJzZXNzaW9uIjoiczEiLCJzaW5rIjp7InNpdGUiOiJhY21lLmNvbSIsInRvb2wiOiJ0eXBlIn0sInNvdXJjZSI6ImFjbWUuY29tIiwidHlwZSI6InJlbGVhc2UiLCJ1c2VzX2xlZnQiOjF9.w61-FV0efrsTUs-H9WPOwOunnzAO39_FhElJvt_LH1genIK-rTd-rEb4nKbJhezKte096oyG9ilaCVioK1VvAQ"
+   ]
+  },
+  {
+   "name": "not bound to anything",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": null
+   },
+   "approve": null,
+   "steps": [
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "not bound to a site or tool",
+     "code": "unbound"
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": null,
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "refused",
+     "decision": "deny",
+     "code": "unbound",
+     "reason": "not bound to a site or tool",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 1
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImNvZGUiOiJ1bmJvdW5kIiwiZGF0YSI6Ik9UUCIsImRlY2lzaW9uIjoiZGVueSIsImhhbmRsZSI6Int7T1RQXzF9fSIsImlhdCI6MTc5MzgzNjgwMCwib3BuIjoiMC4xIiwib3V0Y29tZSI6InJlZnVzZWQiLCJwcmV2IjpudWxsLCJyZWFzb24iOiJub3QgYm91bmQgdG8gYSBzaXRlIG9yIHRvb2wiLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjpudWxsLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MX0.UPCWe2BlyCDFq5XWS84Ld2l5K1ynF0hl9Q3TqFRAQUmHXE0ieRnrQA3AD7H6ZB5W6yebrdrZDUEXlTcu0EHsBQ"
+   ]
+  },
+  {
+   "name": "the audit comes first: no record, no fill, no use counted",
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": {
+    "text": "Your Acme verification code is 482913. It expires in 10 minutes.",
+    "source": {
+     "sender": "no-reply@acme.com"
+    }
+   },
+   "approve": null,
+   "steps": [
+    {
+     "op": "break_log"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    },
+    {
+     "op": "fix_log"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "{{OTP_1}}"
+     },
+     "sink": {
+      "tool": "type",
+      "site": "https://acme.com/login"
+     }
+    }
+   ],
+   "never_in_records": [
+    "482913",
+    "sha-256:So7sSSWCb0tgUm16w8Cpth71SsGSM7r84vShPrSTldI",
+    "4242424242424242",
+    "sha-256:R3u6EzwYImf-XwhpJKvcXbcfd7_CfwHyhD8s3GnYnwU"
+   ],
+   "results": [
+    {
+     "refused": "release not recorded",
+     "code": "not_recorded"
+    },
+    {
+     "args": {
+      "selector": "#otp",
+      "text": "482913"
+     }
+    }
+   ],
+   "records": [
+    {
+     "opn": "0.1",
+     "type": "release",
+     "session": "s1",
+     "seq": 1,
+     "prev": null,
+     "iat": 1793836800,
+     "handle": "{{OTP_1}}",
+     "data": "OTP",
+     "source": "acme.com",
+     "sink": {
+      "tool": "type",
+      "site": "acme.com"
+     },
+     "call": "sha-256:1embKut7rsUuteixOhzv6QMgsUbwwK7DYG_IuFmwTyY",
+     "outcome": "released",
+     "decision": "allow",
+     "authority": {
+      "kind": "binding"
+     },
+     "uses_left": 0
+    }
+   ],
+   "tokens": [
+    "eyJhbGciOiJFZERTQSIsImtpZCI6InNoYS0yNTY6MUlHMnRNSDdKMndiSlpuT2Y4TEp6UWl0S2Y3TE12b0FFbHN1RE1WTTU0WSIsInR5cCI6Im9wbi1yZWxlYXNlK2p3cyJ9.eyJhdXRob3JpdHkiOnsia2luZCI6ImJpbmRpbmcifSwiY2FsbCI6InNoYS0yNTY6MWVtYkt1dDdyc1V1dGVpeE9oenY2UU1nc1Vid3dLN0RZR19JdUZtd1R5WSIsImRhdGEiOiJPVFAiLCJkZWNpc2lvbiI6ImFsbG93IiwiaGFuZGxlIjoie3tPVFBfMX19IiwiaWF0IjoxNzkzODM2ODAwLCJvcG4iOiIwLjEiLCJvdXRjb21lIjoicmVsZWFzZWQiLCJwcmV2IjpudWxsLCJzZXEiOjEsInNlc3Npb24iOiJzMSIsInNpbmsiOnsic2l0ZSI6ImFjbWUuY29tIiwidG9vbCI6InR5cGUifSwic291cmNlIjoiYWNtZS5jb20iLCJ0eXBlIjoicmVsZWFzZSIsInVzZXNfbGVmdCI6MH0.XfHJtYH6p2Y_72tNBvU4GgQ1RvFRfT4ST_AkoJWMyp1gDMEyr34GiuCfcF09jRWd9LBAyusMwQH1HBlxJ1CEDw"
+   ]
+  }
+ ],
+ "shapes": [
+  {
+   "name": "a good allow",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "problems": []
+  },
+  {
+   "name": "a good deny",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "deny",
+    "authority": {
+     "kind": "binding"
+    },
+    "code": "wrong_site",
+    "reason": "bound to a different site"
+   },
+   "problems": []
+  },
+  {
+   "name": "a handle without braces",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "handle": "OTP_1"
+   },
+   "problems": [
+    "release 1: handle is not valid"
+   ]
+  },
+  {
+   "name": "a data type in lower case",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "data": "otp"
+   },
+   "problems": [
+    "release 1: data is not valid"
+   ]
+  },
+  {
+   "name": "a call that is not a digest",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "call": "sha-256:abc"
+   },
+   "problems": [
+    "release 1: call is not valid"
+   ]
+  },
+  {
+   "name": "released but denied",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "outcome": "refused"
+   },
+   "problems": [
+    "release 1: outcome and decision is not valid"
+   ]
+  },
+  {
+   "name": "an authority the spec does not know",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "model"
+    }
+   },
+   "problems": [
+    "release 1: authority is not valid"
+   ]
+  },
+  {
+   "name": "a code on an allow",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "code": "wrong_site"
+   },
+   "problems": [
+    "release 1: code or reason on an allow is not valid"
+   ]
+  },
+  {
+   "name": "a negative count",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "uses_left": -1
+   },
+   "problems": [
+    "release 1: uses_left is not valid"
+   ]
+  },
+  {
+   "name": "a field the spec does not list",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "value": "x"
+   },
+   "problems": [
+    "release 1: the field list is not valid"
+   ]
+  },
+  {
+   "name": "a deny with the recording code",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "deny",
+    "authority": {
+     "kind": "binding"
+    },
+    "code": "wrong_site",
+    "reason": "bound to a different site"
+   },
+   "set": {
+    "code": "not_recorded"
+   },
+   "problems": [
+    "release 1: code is not valid"
+   ]
+  },
+  {
+   "name": "a deny without a reason",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "deny",
+    "authority": {
+     "kind": "binding"
+    },
+    "code": "wrong_site",
+    "reason": "bound to a different site"
+   },
+   "delete": [
+    "reason"
+   ],
+   "problems": [
+    "release 1: reason is not valid"
+   ]
+  },
+  {
+   "name": "a sink with no site field",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "sink": {
+     "tool": "type"
+    }
+   },
+   "problems": [
+    "release 1: sink is not valid"
+   ]
+  },
+  {
+   "name": "a real value hidden in a record",
+   "entry": {
+    "session": "s1",
+    "now": 1793836800,
+    "handle": "{{OTP_1}}",
+    "data": "OTP",
+    "source": "acme.com",
+    "sink": {
+     "tool": "type",
+     "site": "acme.com"
+    },
+    "call": "sha-256:LXEWQrcmsEQBYnyp-6wy9chTD7GQPMTbAiWHF5IaSIE",
+    "decision": "allow",
+    "authority": {
+     "kind": "binding"
+    }
+   },
+   "set": {
+    "authority": {
+     "kind": "person",
+     "by": "code 482913"
+    }
+   },
+   "profile": "browse_and_fill",
+   "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+   "now": 1793836800,
+   "mask": "Your Acme verification code is 482913. It expires in 10 minutes.",
+   "problems": [
+    "release 1: 1 known value(s) found in the record"
+   ]
+  }
+ ]
+}
