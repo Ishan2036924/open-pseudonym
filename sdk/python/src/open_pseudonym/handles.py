@@ -49,6 +49,24 @@ class Approval:
 
 
 DIGEST = re.compile(r"^sha-256:[A-Za-z0-9_-]{43}$")
+# The rule of a policy that set a handle's binding, as a JSON Pointer (RFC 6901) into the policy document: the rule for
+# the type, or the policy's default. With the policy's digest it is the standing a release was decided under (10.4).
+RULE_REF = re.compile(r"^/(?:default|rules/[A-Z][A-Z0-9_]{1,31})$")
+# The id of an audit event that a Sensitive References server wrote before it released values (10.5): opaque, 1 to 128
+# characters of A-Z a-z 0-9 . _ - (the draft's RESOLVER-PROFILE 12.4). Never a value, a reference or a hash of either.
+AUDIT_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+def check_audit_id(audit_id) -> str | None:
+    """Return `audit_id` when it has the strict shape of 10.5, None when there is none. Anything else is a bug in the
+    app and raises before anything is decided, filled or written."""
+    if audit_id is None:
+        return None
+    if not isinstance(audit_id, str):
+        raise TypeError("audit_id is a string")
+    if not AUDIT_ID.fullmatch(audit_id):
+        raise ValueError("audit_id is 1 to 128 characters of A-Z a-z 0-9 . _ -")
+    return audit_id
 
 
 def as_approval(answer) -> Approval:

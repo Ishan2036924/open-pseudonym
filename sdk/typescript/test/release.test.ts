@@ -10,8 +10,8 @@ import { syncBuiltinESMExports } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-  EgressLog, HandleRefused, Session, Signer, Sink, Source, Vault, canonical, digest, makeCheckpoint, srefRegions,
-  verify, verifyLog, type Approval, type SessionOptions,
+  EgressLog, HandleRefused, Policy, Session, Signer, Sink, Source, Vault, canonical, digest, loadProfile, makeCheckpoint,
+  srefRegions, verify, verifyLog, type Approval, type SessionOptions,
 } from "../src/index.ts";
 import { canonicalArgs } from "../src/jcs.ts";
 import { releaseBody } from "../src/egress.ts";
@@ -106,7 +106,7 @@ test("allowed by binding is recorded before it is filled", () => {
     opn: "0.1", type: "release", session: s.id, seq: 1, prev: null, iat: NOW, handle: "{{OTP_1}}", data: "OTP",
     source: "acme.com", sink: { tool: "type", site: "acme.com" },
     call: digest(canonical({ selector: "#otp", text: "{{OTP_1}}" })), outcome: "released", decision: "allow",
-    authority: { kind: "binding" }, uses_left: 0,
+    authority: { kind: "binding", rule: "/rules/OTP", policy: s.policy.digest }, uses_left: 0,
   });
   assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault).problems, []);
 });
@@ -185,7 +185,7 @@ test("a refused approval and a missing approver are recorded", () => {
   s2.mask("card 4242 4242 4242 4242", new Source({ site: "https://shop.example" }));
   refused(() => s2.resolveArgs({ t: "{{CARD_1}}" }, new Sink({ tool: "type", site: "https://shop.example" })));
   const rec2 = records(dir2)[0];
-  assert.deepEqual([rec2.code, rec2.authority], ["needs_approval", { kind: "policy" }]);
+  assert.deepEqual([rec2.code, rec2.authority], ["needs_approval", { kind: "policy", rule: "/rules/CARD", policy: s2.policy.digest }]);
 });
 
 test("an unknown handle is a recorded denial with no data", () => {
@@ -635,3 +635,181 @@ test("verifyLog recomputes shown from the vault", () => {
   forge(dir2, { handle: "{{OTP_7}}", authority: { kind: "person", shown: digest(Buffer.from("what they saw")) } });
   assert.deepEqual(verifyLog(dir2, WRITER.publicKey, s.vault).problems, ["release 1: shown names a handle the vault does not hold"]);
 });
+
+// The standing a release was decided under (0.5, from yaotsakpo on MCP PR 1913), and a Sensitive References audit id
+
+test("a binding names the rule and the policy it came from", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  refused(() => s.resolveArgs({ text: "{{OTP_1}}" }, new Sink({ tool: "type", site: "https://evil.example" })));
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  const want = { kind: "binding", rule: "/rules/OTP", policy: loadProfile("browse_and_fill").digest };
+  assert.deepEqual(records(dir).map((r) => r.authority), [want, want]);
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault, { policies: [s.policy] }).problems, []);
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, null, { policies: [s.policy.toDict()] }).problems, []);
+});
+
+test("a policy default is named as such", () => {
+  const dir = tmp();
+  const doc = { opn: "0.1", type: "policy", id: "all_handles", rules: {}, default: { action: "handle", tools: ["type"] } };
+  const s = new Session(Policy.fromDict(doc), {
+    vault: new Vault(Buffer.alloc(32), NOW), clock: () => NOW, releaseLog: new EgressLog(dir, WRITER, false),
+  });
+  s.mask(OTP_MAIL, new Source({ sender: "no-reply@acme.com" }));
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  assert.deepEqual(records(dir)[0].authority,
+    { kind: "binding", rule: "/default", policy: digest(canonical(Policy.fromDict(doc).toDict())) });
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, null, { policies: [doc] }).problems, []);
+});
+
+test("the standing is kept with the entry so a later policy cannot rewrite it", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  const first = s.policy.digest;
+  (s as any).policy = s.policy.tighten(loadProfile("strict")); // the app switches policy after the handle was made
+  assert.notEqual(s.policy.digest, first);
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  assert.equal(records(dir)[0].authority.policy, first);
+});
+
+test("no standing where no rule decided", () => {
+  const dir = tmp();
+  const { s } = withLog(dir, { approve: () => ({ allowed: true, by: "mia" }) });
+  refused(() => s.resolveArgs({ t: "{{OTP_9}}" }, ACME));
+  refused(() => s.resolveArgs({ t: "{{OTP_1}}", x: "\ud800" }, ACME));
+  s.resolveArgs({ t: "{{OTP_1}}" }, ACME);
+  const auths = records(dir).map((r) => r.authority);
+  assert.deepEqual(auths.slice(0, 2), [{ kind: "binding" }, { kind: "binding" }]); // unknown handle; malformed arguments
+  assert.equal(auths[2].kind, "person");
+  assert.ok(!("rule" in auths[2]) && !("policy" in auths[2]));
+});
+
+test("a vault from before 0.5 names only the kind", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  delete s.vault.entries[0].meta.rule;
+  delete s.vault.entries[0].meta.policy;
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  assert.deepEqual(records(dir)[0].authority, { kind: "binding" });
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault, { policies: [s.policy] }).problems, []);
+});
+
+test("a tampered standing in the vault is not written", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  s.vault.entries[0].meta.rule = "OTP"; // not a pointer: the record falls back to the kind alone
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME);
+  assert.deepEqual(records(dir)[0].authority, { kind: "binding" });
+});
+
+const P = digest(Buffer.from("p"));
+for (const authority of [
+  { kind: "binding", rule: "/rules/OTP" },
+  { kind: "binding", policy: P },
+  { kind: "person", by: "mia", rule: "/rules/OTP", policy: P },
+  { kind: "consent", ref: "c1", digest: digest(Buffer.from("t")), rule: "/rules/OTP", policy: P },
+  { kind: "binding", rule: "OTP", policy: P },
+  { kind: "binding", rule: "/rules/otp", policy: P },
+  { kind: "binding", rule: "/rules/OTP/uses", policy: P },
+  { kind: "binding", rule: "/rules/OTP", policy: "browse_and_fill" },
+]) {
+  test(`the writer refuses a standing out of shape: ${JSON.stringify(authority)}`, () => {
+    assert.throws(() => forge(tmp(), { authority }), RangeError);
+  });
+}
+
+function signed(dir: string, set: Record<string, any>): void {
+  const body = releaseBody({
+    session: "s1", now: NOW, handle: "{{OTP_1}}", data: "OTP", source: null, sink: { tool: "type", site: null },
+    call: digest(Buffer.from("x")), decision: "allow", authority: { kind: "binding" },
+  }, 1, null);
+  Object.assign(body, set);
+  fs.writeFileSync(path.join(dir, "receipts.jsonl"), WRITER.sign(body, "opn-release+jws") + "\n");
+}
+
+for (const authority of [
+  { kind: "binding", rule: "/rules/OTP" },
+  { kind: "person", by: "mia", rule: "/rules/OTP", policy: P },
+  { kind: "binding", rule: "/rules", policy: P },
+]) {
+  test(`verifyLog flags a standing out of shape: ${JSON.stringify(authority)}`, () => {
+    const dir = tmp();
+    signed(dir, { authority });
+    assert.deepEqual(verifyLog(dir, WRITER.publicKey).problems, ["release 1: authority.rule or authority.policy is not valid"]);
+  });
+}
+
+for (const [rule, data, problem] of [
+  ["/rules/OTP", "OTP", false],
+  ["/rules/CARD", "OTP", true], // the rule of another type
+  ["/default", "OTP", true], // OTP has its own rule, so the default did not decide
+  ["/default", "PERSON", true], // the default is tag, not handle
+  ["/rules/EMAIL", "EMAIL", true], // EMAIL is fake, not handle
+  ["/rules/NOPE", "NOPE", true], // no such rule
+] as [string, string, boolean][]) {
+  test(`verifyLog checks the rule against the policy: ${rule} for ${data}`, () => {
+    const dir = tmp();
+    const baf = loadProfile("browse_and_fill");
+    forge(dir, { data, authority: { kind: "binding", rule, policy: baf.digest } });
+    const got = verifyLog(dir, WRITER.publicKey, null, { policies: [loadProfile("strict"), baf] }).problems;
+    assert.deepEqual(got, problem ? ["release 1: authority.rule is not the handle rule for the record's data type in that policy"] : []);
+    assert.deepEqual(verifyLog(dir, WRITER.publicKey).problems, []); // without the policy there is nothing to check
+  });
+}
+
+test("verifyLog flags a policy digest that matches no policy given", () => {
+  const dir = tmp();
+  forge(dir, { authority: { kind: "binding", rule: "/rules/OTP", policy: loadProfile("browse_and_fill").digest } });
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, null, { policies: [loadProfile("strict")] }).problems,
+    ["release 1: authority.policy is not the digest of any policy given"]);
+});
+
+test("an audit id goes into every record of its call", () => {
+  const dir = tmp();
+  const s = make("browse_and_fill", { releaseLog: new EgressLog(dir, WRITER, false) });
+  s.mask(OTP_MAIL + " Password: hunter2-xyz", new Source({ site: "https://acme.com" }));
+  const handles = s.vault.entries.filter((e) => e.action === "handle").map((e) => e.standIn).sort();
+  refused(() => s.resolveArgs({ a: handles[0] }, new Sink({ tool: "type", site: "https://evil.example" }), { auditId: "evt-1" }));
+  s.resolveArgs({ a: handles[0], b: handles[1] }, ACME, { auditId: "evt_01JD8Z.r-7" });
+  s.resolveArgs({ a: handles[1] }, ACME);
+  assert.deepEqual(records(dir).map((r) => r.audit_id ?? null), ["evt-1", "evt_01JD8Z.r-7", "evt_01JD8Z.r-7", null]);
+  assert.deepEqual(verifyLog(dir, WRITER.publicKey, s.vault).problems, []);
+});
+
+test("an audit id passes through JSON text arguments", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  assert.equal(s.resolveArgs('{"text": "{{OTP_1}}"}', ACME, { auditId: "evt-2" }).args, '{"text":"482913"}');
+  assert.equal(records(dir)[0].audit_id, "evt-2");
+});
+
+for (const bad of ["", "e".repeat(129), "evt 1", "evt/1", "evt:1", "évt", "evt\n", 7, Buffer.from("evt"), ["evt"]]) {
+  test(`a malformed audit id is refused before anything: ${JSON.stringify(bad)}`, () => {
+    const dir = tmp();
+    const { s, log } = withLog(dir);
+    assert.throws(() => s.resolveArgs({ text: "{{OTP_1}}" }, ACME, { auditId: bad as any }), (e) => e instanceof TypeError || e instanceof RangeError);
+    assert.deepEqual([log.seq, s.vault.entries[0].meta.uses_left], [0, 1]); // nothing written, no use counted
+    assert.deepEqual(s.resolveArgs({ text: "{{OTP_1}}" }, ACME, { auditId: "E".repeat(128) }).args, { text: "482913" });
+    assert.equal(records(dir)[0].audit_id, "E".repeat(128));
+  });
+}
+
+test("an audit id is never looked up but a value in it is still caught", () => {
+  const dir = tmp();
+  const { s } = withLog(dir);
+  // the writer treats the id as opaque: it does not refuse one that happens to hold a real value...
+  s.resolveArgs({ text: "{{OTP_1}}" }, ACME, { auditId: "otp-482913" });
+  // ...but the verifier's "no value in any record" check reads every field, the audit id included
+  const report = verifyLog(dir, WRITER.publicKey, s.vault);
+  assert.deepEqual(report.problems, ["release 1: 1 known value(s) found in the record"]);
+  assert.equal(report.leaks, 1);
+});
+
+for (const value of ["", "a b", "x".repeat(129), 5]) {
+  test(`verifyLog and the writer refuse an audit id out of shape: ${JSON.stringify(value)}`, () => {
+    assert.throws(() => forge(tmp(), { auditId: value }), RangeError);
+    const dir = tmp();
+    signed(dir, { audit_id: value });
+    assert.deepEqual(verifyLog(dir, WRITER.publicKey).problems, ["release 1: audit_id is not valid"]);
+  });
+}

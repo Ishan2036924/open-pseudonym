@@ -17,9 +17,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { ambiguousNames, cueOnly, stopwords } from "./checks.ts";
 import { KnownDetector, type Form } from "./detect.ts";
-import { CODES, DIGEST, HANDLE, shownDigest } from "./handles.ts";
+import { AUDIT_ID, CODES, DIGEST, HANDLE, RULE_REF, shownDigest } from "./handles.ts";
 import { b64urlDecode, canonical, digest } from "./jcs.ts";
 import { keyId, SignatureError, type Signer, verify } from "./jws.ts";
+import { Policy } from "./policy.ts";
 import { Restorer } from "./restore.ts";
 import { CASELESS_TYPES, DIGIT_TYPES, digitsOf } from "./types.ts";
 import type { Vault } from "./vault.ts";
@@ -317,10 +318,27 @@ export interface ReleaseEntry {
   sink: { tool: string | null; site: string | null };
   call: string;
   decision: "allow" | "deny";
-  authority: { kind: string; ref?: string | null; digest?: string | null; by?: string | null; channel?: string | null; shown?: string | null };
+  authority: {
+    kind: string; ref?: string | null; digest?: string | null; by?: string | null; channel?: string | null; shown?: string | null;
+    rule?: string | null; policy?: string | null;
+  };
   code?: string | null;
   reason?: string | null;
   usesLeft?: number | null;
+  /** The opaque id of a Sensitive References audit event for the same call (spec 10.5). */
+  auditId?: string | null;
+}
+
+const AUTHORITY_FIELDS = ["kind", "ref", "digest", "by", "channel", "shown", "rule", "policy"];
+// `rule` and `policy` (the standing, spec 10.4) belong to decisions no person made, and always come as a pair
+const STANDING_KINDS = ["binding", "policy"];
+
+/** `rule` and `policy` (spec 10.4): both or neither; only on a binding or a policy decision; a JSON Pointer to a rule and a policy digest. */
+function standingOk(auth: Record<string, any>): boolean {
+  const has = ["rule", "policy"].map((k) => k in auth);
+  if (!has.some(Boolean)) return true;
+  return has.every(Boolean) && STANDING_KINDS.includes(auth.kind) && typeof auth.rule === "string" && RULE_REF.test(auth.rule)
+    && isDigest(auth.policy);
 }
 
 /** The signed body of a release record. Refuses anything that does not fit the schema, so a bug cannot put a value in. */
@@ -328,8 +346,11 @@ export function releaseBody(e: ReleaseEntry, seq: number, prev: string | null): 
   if (e.decision !== "allow" && e.decision !== "deny") throw new RangeError("decision is allow or deny");
   const authority: Record<string, string> = {};
   for (const [k, v] of Object.entries(e.authority)) if (v != null) authority[k] = v;
-  if (!AUTHORITY_KINDS.includes(authority.kind) || !Object.keys(authority).every((k) => ["kind", "ref", "digest", "by", "channel", "shown"].includes(k))) {
-    throw new RangeError("authority is {kind, ref?, digest?, by?, channel?, shown?}");
+  if (!AUTHORITY_KINDS.includes(authority.kind) || !Object.keys(authority).every((k) => AUTHORITY_FIELDS.includes(k))) {
+    throw new RangeError("authority is {kind, ref?, digest?, by?, channel?, shown?, rule?, policy?}");
+  }
+  if (!standingOk(authority)) {
+    throw new RangeError("rule and policy come together, only for a binding or a policy, as a pointer and a digest");
   }
   const body: Record<string, unknown> = {
     opn: "0.1", type: "release", session: e.session, seq, prev, iat: e.now, handle: e.handle, data: e.data ?? null,
@@ -344,6 +365,10 @@ export function releaseBody(e: ReleaseEntry, seq: number, prev: string | null): 
     body.reason = e.reason;
   }
   if (e.usesLeft != null) body.uses_left = e.usesLeft;
+  if (e.auditId != null) {
+    if (!(typeof e.auditId === "string" && AUDIT_ID.test(e.auditId))) throw new RangeError("audit_id is 1 to 128 characters of A-Z a-z 0-9 . _ -");
+    body.audit_id = e.auditId;
+  }
   return body;
 }
 
@@ -380,6 +405,11 @@ export interface VerifyOptions {
   anchors?: Iterable<string>;
   /** The public key of whoever made the checkpoints. */
   anchorKey?: KeyObject | null;
+  /**
+   * Policies (Policy objects or policy documents) the log's release records may name: a record that names its standing
+   * must name the digest of one of them, and a rule in it that is the handle rule for the record's data type.
+   */
+  policies?: Iterable<Policy | Record<string, any>>;
 }
 
 /**
@@ -390,7 +420,8 @@ export interface VerifyOptions {
  * (`expectLast`, from the x-opn-receipt header the app kept). Or pass checkpoints (`anchors`) made by a key the log
  * writer does not hold (`anchorKey`, its public key): the report then says how far the log is proven complete.
  *
- * Release records (spec 10.4) are checked for their fields, and, given the vault, for any real value in them.
+ * Release records (spec 10.4) are checked for their fields, and, given the vault, for any real value in them. Given
+ * `policies`, a record that names its standing must name one of them, and the handle rule for its data type in it.
  *
  * Returns counts, a list of problems (an empty list means the log holds up), and `provenTo` (the highest sequence
  * number a valid checkpoint vouches for, or null), `status` ("complete" or "prefix") and `reason` (why not complete).
@@ -415,6 +446,7 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
   let releases = 0;
   let session0: string | null = null;
   const restorer = vault ? new Restorer(vault) : null;
+  const given = policyDocs(o.policies);
   for (const [idx, token] of lines.entries()) {
     const i = idx + 1;
     const typ = lineTyp(token);
@@ -438,6 +470,7 @@ export function verifyLog(folder: string, publicKey: KeyObject, vault?: Vault | 
       releases += 1;
       const bad = releaseProblems(i, body);
       problems.push(...bad);
+      if (given !== null && bad.length === 0) problems.push(...standingProblems(i, body, given));
       if (vault && bad.length === 0) {
         problems.push(...shownProblems(i, body, vault));
         const found = check(vault, canonical(body), restorer);
@@ -511,13 +544,47 @@ const isDigest = (v: unknown): boolean => typeof v === "string" && DIGEST.test(v
 const isStr = (v: unknown): v is string => typeof v === "string";
 
 /** Everything wrong with the shape of a release record (spec 10.4), one short line each. */
+/** The policies a verifier was given, by digest, as their normalised documents. Null when none were given. */
+function policyDocs(policies: Iterable<Policy | Record<string, any>> | undefined): Map<string, Record<string, any>> | null {
+  const found = new Map<string, Record<string, any>>();
+  for (const p of policies ?? []) {
+    const doc = (p instanceof Policy ? p : Policy.fromDict(p)).toDict();
+    found.set(digest(canonical(doc)), doc);
+  }
+  return found.size > 0 ? found : null;
+}
+
+/**
+ * Given the policies, check the standing of a record (spec 10.4): its `policy` is the digest of one of them, and its
+ * `rule` points at that policy's handle rule for the record's data type.
+ */
+function standingProblems(i: number, body: Record<string, any>, given: Map<string, Record<string, any>>): string[] {
+  const auth = body.authority;
+  if (!("policy" in auth)) return [];
+  const doc = given.get(auth.policy);
+  if (doc === undefined) return [`release ${i}: authority.policy is not the digest of any policy given`];
+  const data = body.data;
+  const rules: Record<string, any> = doc.rules;
+  let target: any = null;
+  if (auth.rule === "/default") {
+    target = data != null && !Object.hasOwn(rules, data) ? doc.default : null;
+  } else {
+    const name = auth.rule.slice("/rules/".length);
+    target = name === data && Object.hasOwn(rules, name) ? rules[name] : null;
+  }
+  if (!(target !== null && typeof target === "object" && target.action === "handle")) {
+    return [`release ${i}: authority.rule is not the handle rule for the record's data type in that policy`];
+  }
+  return [];
+}
+
 export function releaseProblems(i: number, body: Record<string, any>): string[] {
   const out: string[] = [];
   const bad = (field: string): void => {
     out.push(`release ${i}: ${field} is not valid`);
   };
   const required = ["opn", "type", "session", "seq", "prev", "iat", "handle", "data", "source", "sink", "call", "outcome", "decision", "authority"];
-  const allowed = [...required, "reason", "code", "uses_left"];
+  const allowed = [...required, "reason", "code", "uses_left", "audit_id"];
   const keys = Object.keys(body);
   if (!required.every((k) => keys.includes(k)) || !keys.every((k) => allowed.includes(k))) bad("the field list");
   if (body.opn !== "0.1" || body.type !== "release") bad("opn or type");
@@ -535,9 +602,10 @@ export function releaseProblems(i: number, body: Record<string, any>): string[] 
   if (pair !== "released/allow" && pair !== "refused/deny") bad("outcome and decision");
   const auth = body.authority;
   if (!(auth !== null && typeof auth === "object" && !Array.isArray(auth) && AUTHORITY_KINDS.includes(auth.kind)
-      && Object.keys(auth).every((k) => ["kind", "ref", "digest", "by", "channel", "shown"].includes(k))
+      && Object.keys(auth).every((k) => AUTHORITY_FIELDS.includes(k))
       && Object.values(auth).every((v) => isStr(v) && v !== "")
       && ["digest", "shown"].every((k) => !(k in auth) || isDigest(auth[k])))) bad("authority");
+  else if (!standingOk(auth)) bad("authority.rule or authority.policy");
   if (body.decision === "deny") {
     if (!(CODES as readonly string[]).includes(body.code) || body.code === "not_recorded") bad("code");
     if (!(isStr(body.reason) && body.reason !== "")) bad("reason");
@@ -545,6 +613,7 @@ export function releaseProblems(i: number, body: Record<string, any>): string[] 
     bad("code or reason on an allow");
   }
   if ("uses_left" in body && !(isInt(body.uses_left) && body.uses_left >= 0)) bad("uses_left");
+  if ("audit_id" in body && !(isStr(body.audit_id) && AUDIT_ID.test(body.audit_id))) bad("audit_id");
   return out;
 }
 

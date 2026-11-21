@@ -18,7 +18,7 @@ from .fpe import FF1
 from .handles import Approval, HandleRefused, Sink, Source
 from .jcs import canonical, digest
 from .jws import Signer, verify
-from .policy import PolicyError, load_profile
+from .policy import Policy, PolicyError, load_profile
 from .session import Session
 from .vault import Vault
 
@@ -191,7 +191,8 @@ def run_release_case(case: dict, folder: Path) -> dict:
     spec = case.get("approve")
     approve = None if spec is None else (lambda *_: Approval(**spec) if isinstance(spec, dict) else spec)
     writer = _signer("writer")
-    s = Session(case["profile"], Vault(seed=bytes.fromhex(case["seed"]), created=case["now"]), clock=lambda: now[0],
+    policy = _policy(case.get("policy", case.get("profile")))
+    s = Session(policy, Vault(seed=bytes.fromhex(case["seed"]), created=case["now"]), clock=lambda: now[0],
                 approve=approve, session_id="s1", release_log=EgressLog(folder, writer, store_payloads=False))
     if case.get("mask"):
         src = case["mask"].get("source")
@@ -208,13 +209,22 @@ def run_release_case(case: dict, folder: Path) -> dict:
             continue
         try:
             args = json.loads(st["args_json"]) if "args_json" in st else st["args"]
-            results.append({"args": s.resolve_args(args, Sink(**st["sink"])).args})
+            results.append({"args": s.resolve_args(args, Sink(**st["sink"]), audit_id=st.get("audit_id")).args})
         except HandleRefused as exc:
             results.append({"refused": exc.reason, "code": exc.code})
+        except (TypeError, ValueError):
+            if "audit_id" not in st:
+                raise
+            results.append({"invalid": "audit_id"})  # an app bug: raised before anything was decided or written
     tokens = read_lines(folder)
     records = [verify(t, writer.public_key, "opn-release+jws") for t in tokens]
     return {"results": results, "records": records, "tokens": tokens,
-            "report": verify_log(folder, writer.public_key, s.vault)}
+            "report": verify_log(folder, writer.public_key, s.vault, policies=[policy])}
+
+
+def _policy(spec) -> Policy:
+    """A vector names a starter profile, or gives a policy document inline."""
+    return load_profile(spec) if isinstance(spec, str) else Policy.from_dict(spec)
 
 
 def run_shape_case(case: dict, folder: Path) -> list[str]:
@@ -232,7 +242,8 @@ def run_shape_case(case: dict, folder: Path) -> list[str]:
                     clock=lambda: case["now"])
         s.mask(case["mask"])
         vault = s.vault
-    return verify_log(folder, writer.public_key, vault)["problems"]
+    policies = [_policy(p) for p in case.get("policies", [])]
+    return verify_log(folder, writer.public_key, vault, policies=policies)["problems"]
 
 
 def run_checkpoint_case(doc: dict, case: dict, folder: Path) -> dict:

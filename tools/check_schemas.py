@@ -35,8 +35,16 @@ def main() -> int:
             errors += [f"release vector {case['name']!r} record {i}: {e.message}" for e in rel.iter_errors(rec)]
     # the schema must also refuse what verify_log refuses: a value-shaped field, a code on an allow
     allow = releases["cases"][0]["records"][1]
+    std = {"rule": "/rules/OTP", "policy": allow["authority"]["policy"]}
     for name, bad in {"an extra field": {**allow, "value": "482913"}, "a code on an allow": {**allow, "code": "used_up"},
-                      "no authority": {k: v for k, v in allow.items() if k != "authority"}}.items():
+                      "no authority": {k: v for k, v in allow.items() if k != "authority"},
+                      "a rule without its policy": {**allow, "authority": {"kind": "binding", "rule": "/rules/OTP"}},
+                      "a policy without its rule": {**allow, "authority": {"kind": "binding", "policy": std["policy"]}},
+                      "a standing on a person's answer": {**allow, "authority": {"kind": "person", **std}},
+                      "a rule that is not a pointer": {**allow, "authority": {"kind": "binding", **std, "rule": "OTP"}},
+                      "an empty audit id": {**allow, "audit_id": ""},
+                      "an audit id of 129 characters": {**allow, "audit_id": "e" * 129},
+                      "an audit id with a slash": {**allow, "audit_id": "evt/1"}}.items():
         if not list(rel.iter_errors(bad)):
             errors.append(f"release schema accepts {name}")
     sec = ROOT / "vectors/checkpoints.json"

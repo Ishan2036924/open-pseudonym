@@ -23,7 +23,7 @@ from pathlib import Path
 
 from .checks import ambiguous_names, cue_only, stopwords
 from .detect import KnownDetector
-from .handles import CODES, DIGEST, HANDLE, shown_digest
+from .handles import AUDIT_ID, CODES, DIGEST, HANDLE, RULE_REF, shown_digest
 from .jcs import b64url_decode, canonical, digest
 from .jws import SignatureError, Signer, key_id, verify
 from .restore import Restorer
@@ -34,6 +34,9 @@ RECEIPT_TYP = "opn-egress+jws"
 RELEASE_TYP = "opn-release+jws"
 CHECKPOINT_TYP = "opn-checkpoint+jws"
 AUTHORITY_KINDS = ("binding", "person", "consent", "policy")
+AUTHORITY_FIELDS = ("kind", "ref", "digest", "by", "channel", "shown", "rule", "policy")
+# `rule` and `policy` (the standing, spec 10.4) belong to decisions no person made, and always come as a pair
+STANDING_KINDS = ("binding", "policy")
 
 
 class EgressLeak(Exception):
@@ -210,8 +213,9 @@ class EgressLog:
     def record_releases(self, entries: list[dict]) -> list[str]:
         """Sign and append release records, all in one write, so a call that fills several handles is recorded whole
         or not at all. Each entry takes: session, now, handle, data, source, sink ({tool, site}), call, decision
-        ("allow" or "deny"), authority ({kind, ref?, digest?, by?, channel?, shown?}) and, as they apply, code
-        (a deny), reason (a deny) and uses_left. There is no field for a value, and none may be added."""
+        ("allow" or "deny"), authority ({kind, ref?, digest?, by?, channel?, shown?, rule?, policy?}) and, as they
+        apply, code (a deny), reason (a deny), uses_left and audit_id (the opaque id of a Sensitive References audit
+        event, spec 10.5). There is no field for a value, and none may be added."""
         seq, prev, tokens = self.seq, self.prev, []
         for e in entries:
             body = release_body(e, seq + 1, prev)
@@ -261,8 +265,10 @@ def release_body(e: dict, seq: int, prev: str | None) -> dict:
     if decision not in ("allow", "deny"):
         raise ValueError("decision is allow or deny")
     authority = {k: v for k, v in e["authority"].items() if v is not None}
-    if authority.get("kind") not in AUTHORITY_KINDS or not set(authority) <= {"kind", "ref", "digest", "by", "channel", "shown"}:
-        raise ValueError("authority is {kind, ref?, digest?, by?, channel?, shown?}")
+    if authority.get("kind") not in AUTHORITY_KINDS or not set(authority) <= set(AUTHORITY_FIELDS):
+        raise ValueError("authority is {kind, ref?, digest?, by?, channel?, shown?, rule?, policy?}")
+    if not _standing_ok(authority):
+        raise ValueError("rule and policy come together, only for a binding or a policy, as a pointer and a digest")
     body = {
         "opn": "0.1", "type": "release", "session": e["session"], "seq": seq, "prev": prev, "iat": e["now"],
         "handle": e["handle"], "data": e.get("data"), "source": e.get("source"),
@@ -277,7 +283,21 @@ def release_body(e: dict, seq: int, prev: str | None) -> dict:
         body["reason"] = e["reason"]
     if e.get("uses_left") is not None:
         body["uses_left"] = e["uses_left"]
+    if e.get("audit_id") is not None:
+        if not (isinstance(e["audit_id"], str) and AUDIT_ID.fullmatch(e["audit_id"])):
+            raise ValueError("audit_id is 1 to 128 characters of A-Z a-z 0-9 . _ -")
+        body["audit_id"] = e["audit_id"]
     return body
+
+
+def _standing_ok(auth: dict) -> bool:
+    """`rule` and `policy` (spec 10.4): both or neither; only on a binding or a policy decision; a JSON Pointer to a
+    rule and a policy digest."""
+    has = [k in auth for k in ("rule", "policy")]
+    if not any(has):
+        return True
+    return (all(has) and auth.get("kind") in STANDING_KINDS and isinstance(auth["rule"], str)
+            and RULE_REF.fullmatch(auth["rule"]) is not None and _is_digest(auth["policy"]))
 
 
 def make_checkpoint(signer: Signer, *, session: str, seq: int, head: str, now: int) -> str:
@@ -288,7 +308,7 @@ def make_checkpoint(signer: Signer, *, session: str, seq: int, head: str, now: i
 
 def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: int | None = None,
                expect_last: str | None = None, expect_session: str | None = None, anchors=(),
-               anchor_key=None) -> dict:
+               anchor_key=None, policies=()) -> dict:
     """Check every record: signature, chain, payload digest and (with the vault) the egress check again.
 
     A chain proves that nothing in the middle was changed, but not that nothing was cut off the end. Two ways to catch
@@ -297,7 +317,9 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
     strings) made by a key the log writer does not hold (`anchor_key`, its public key): the report then says how far the
     log is proven complete.
 
-    Release records (spec 10.4) are checked for their fields, and, given the vault, for any real value in them.
+    Release records (spec 10.4) are checked for their fields, and, given the vault, for any real value in them. Given
+    `policies` (Policy objects or policy documents), a record that names its standing must name the digest of one of
+    them, and a rule in it that is the handle rule for the record's data type.
 
     Returns counts, a list of problems (an empty list means the log holds up), and `proven_to` (the highest sequence
     number a valid checkpoint vouches for, or None), `status` ("complete": the last record is vouched for; "prefix":
@@ -322,6 +344,7 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
     releases = 0
     session0 = None
     restorer = Restorer(vault) if vault is not None else None
+    given = _policy_docs(policies)
     for i, token in enumerate(lines, start=1):
         typ = _line_typ(token)
         try:
@@ -349,6 +372,8 @@ def verify_log(folder, public_key, vault: Vault | None = None, *, expect_count: 
             releases += 1
             bad = release_problems(i, body)
             problems.extend(bad)
+            if given is not None and not bad:
+                problems.extend(_standing_problems(i, body, given))
             if vault is not None and not bad:
                 problems.extend(_shown_problems(i, body, vault))
                 found = check(vault, canonical(body), restorer)
@@ -401,6 +426,37 @@ def _line_typ(token: str) -> str:
     return RELEASE_TYP if isinstance(header, dict) and header.get("typ") == RELEASE_TYP else RECEIPT_TYP
 
 
+def _policy_docs(policies) -> dict[str, dict] | None:
+    """The policies a verifier was given, by digest, as their normalised documents. None when none were given."""
+    from .policy import Policy
+
+    found = {}
+    for p in policies or ():
+        doc = (p if isinstance(p, Policy) else Policy.from_dict(p)).to_dict()
+        found[digest(canonical(doc))] = doc
+    return found or None
+
+
+def _standing_problems(i: int, body: dict, given: dict[str, dict]) -> list[str]:
+    """Given the policies, check the standing of a record (spec 10.4): its `policy` is the digest of one of them, and
+    its `rule` points at that policy's handle rule for the record's data type."""
+    auth = body["authority"]
+    if "policy" not in auth:
+        return []
+    doc = given.get(auth["policy"])
+    if doc is None:
+        return [f"release {i}: authority.policy is not the digest of any policy given"]
+    data, rule = body.get("data"), auth["rule"]
+    if rule == "/default":
+        target = doc["default"] if data is not None and data not in doc["rules"] else None
+    else:
+        name = rule[len("/rules/"):]
+        target = doc["rules"].get(name) if name == data else None
+    if not (isinstance(target, dict) and target.get("action") == "handle"):
+        return [f"release {i}: authority.rule is not the handle rule for the record's data type in that policy"]
+    return []
+
+
 def _shown_problems(i: int, body: dict, vault: Vault) -> list[str]:
     """With the vault, recompute `shown` (spec 10.4) from the entry, its secret nonce and the record's tool and site."""
     shown = body["authority"].get("shown")
@@ -431,7 +487,7 @@ def release_problems(i: int, body: dict) -> list[str]:
 
     required = {"opn", "type", "session", "seq", "prev", "iat", "handle", "data", "source", "sink", "call", "outcome",
                 "decision", "authority"}
-    if not required <= set(body) or not set(body) <= required | {"reason", "code", "uses_left"}:
+    if not required <= set(body) or not set(body) <= required | {"reason", "code", "uses_left", "audit_id"}:
         bad("the field list")
     if body.get("opn") != "0.1" or body.get("type") != "release":
         bad("opn or type")
@@ -460,10 +516,12 @@ def release_problems(i: int, body: dict) -> list[str]:
         bad("outcome and decision")
     auth = body.get("authority")
     if not (isinstance(auth, dict) and auth.get("kind") in AUTHORITY_KINDS
-            and set(auth) <= {"kind", "ref", "digest", "by", "channel", "shown"}
+            and set(auth) <= set(AUTHORITY_FIELDS)
             and all(isinstance(v, str) and v for v in auth.values())
             and all(_is_digest(auth[k]) for k in ("digest", "shown") if k in auth)):
         bad("authority")
+    elif not _standing_ok(auth):
+        bad("authority.rule or authority.policy")
     if body.get("decision") == "deny":
         if body.get("code") not in CODES or body.get("code") == "not_recorded":
             bad("code")
@@ -473,6 +531,8 @@ def release_problems(i: int, body: dict) -> list[str]:
         bad("code or reason on an allow")
     if "uses_left" in body and not (_is_int(body["uses_left"]) and body["uses_left"] >= 0):
         bad("uses_left")
+    if "audit_id" in body and not (isinstance(body["audit_id"], str) and AUDIT_ID.fullmatch(body["audit_id"])):
+        bad("audit_id")
     return out
 
 

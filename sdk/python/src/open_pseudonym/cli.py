@@ -126,6 +126,14 @@ def cmd_restore(args) -> int:
     return 0
 
 
+def _policy_arg(name: str):
+    """A policy for `verify --policy`: a policy JSON file, or the name of a starter profile."""
+    from .policy import Policy, load_profile
+
+    path = Path(name)
+    return Policy.from_dict(json.loads(path.read_text())) if path.is_file() else load_profile(name)
+
+
 def cmd_verify(args) -> int:
     from .egress import verify_log
 
@@ -134,8 +142,9 @@ def cmd_verify(args) -> int:
     vault = Vault.load(args.vault, load_vault_key(args)) if args.vault else None
     anchors = [Path(f).read_text().strip() for f in args.anchor]
     anchor_key = public_key_from_pem(Path(args.anchor_pub).read_bytes()) if args.anchor_pub else None
+    policies = [_policy_arg(p) for p in args.policy]
     report = verify_log(args.logdir, pub, vault, expect_count=args.expect_count, expect_last=args.expect_last,
-                        expect_session=args.expect_session, anchors=anchors, anchor_key=anchor_key)
+                        expect_session=args.expect_session, anchors=anchors, anchor_key=anchor_key, policies=policies)
     print(f"receipts: {report['receipts']} (release records: {report['releases']}, last: {report['last']})")
     if anchors:
         print(f"checkpoints vouch for the log up to record {report['proven_to']}: {report['status']}")
@@ -299,6 +308,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--anchor", action="append", default=[], metavar="FILE",
                    help="a file holding a checkpoint, made by a key the log writer does not hold")
     v.add_argument("--anchor-pub", help="the public key PEM of whoever made the checkpoints")
+    v.add_argument("--policy", action="append", default=[], metavar="FILE_OR_PROFILE",
+                   help="a policy the log's release records may name (a JSON file or a starter profile); each record's "
+                        "rule and policy digest are checked against these")
     v.set_defaults(fn=cmd_verify)
 
     k = sub.add_parser("checkpoint", help="sign a checkpoint of a log with this key folder's key (run it as the anchor)")

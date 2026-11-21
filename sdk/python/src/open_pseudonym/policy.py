@@ -167,6 +167,11 @@ class Policy:
     def rule_for(self, type_: str) -> Rule:
         return self.rules.get(type_, self.default)
 
+    def rule_ref(self, type_: str) -> str:
+        """Where `rule_for(type_)` sits in this policy's document, as a JSON Pointer (RFC 6901): `/rules/<TYPE>` or
+        `/default`. With `digest` it names the rule a release record says decided (spec 10.4)."""
+        return f"/rules/{type_}" if type_ in self.rules else "/default"
+
     def tighten(self, other: "Policy") -> "Policy":
         """The stricter of two policies, type by type. Ties keep this policy's rule."""
         types = set(self.rules) | set(other.rules)
