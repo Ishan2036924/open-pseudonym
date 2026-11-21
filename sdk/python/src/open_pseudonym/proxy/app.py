@@ -15,12 +15,10 @@ The vault for each session lives in this process (and optionally on disk, encryp
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import time
 import uuid
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,12 +29,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from ..egress import EgressLeak, EgressLog
-from ..handles import HANDLE, HandleRefused, Sink, Source
+from ..egress import EgressLeak
+from ..gateway import Gateway, file_id as _file_id  # noqa: F401  (old import path, kept for callers)
+from ..handles import Source
 from ..jws import Signer
-from ..policy import Policy, load_profile
-from ..session import SKIP_KEYS, TOP_KEYS, RefusedData, Session
-from ..vault import Vault
+from ..policy import Policy
+from ..session import RefusedData, Session
 from .sse import Event, Parser
 
 # headers that must not be copied from the app's request to the upstream, or back
@@ -62,151 +60,24 @@ class ProxyConfig:
     timeout_s: float = 600.0
 
 
-class Proxy:
-    def __init__(self, config: ProxyConfig):
-        self.config = config
-        self.base_policy = load_profile(config.profile)
-        self.signer = config.signer or Signer.generate()
-        self.sessions: OrderedDict[str, Session] = OrderedDict()
-        self.logs: dict[str, EgressLog] = {}
-        self.client = httpx.AsyncClient(transport=config.transport, timeout=config.timeout_s)
+class Proxy(Gateway):
+    """The gateway behind an HTTP endpoint: sessions, masking and restoring come from Gateway."""
 
-    # Sessions
+    def __init__(self, config: ProxyConfig):
+        super().__init__(config)
+        self.client = httpx.AsyncClient(transport=config.transport, timeout=config.timeout_s)
 
     def policy_for(self, request: Request) -> Policy:
         name = request.headers.get("x-opn-profile")
-        if not name:
-            return self.base_policy
-        if name not in self.config.allowed_profiles:
+        if name and name not in self.config.allowed_profiles:
             raise PermissionError(f"profile {name!r} is not enabled on this proxy")
-        return self.base_policy.tighten(load_profile(name))
-
-    def session_for(self, sid: str, policy: Policy) -> Session:
-        s = self.sessions.get(sid)
-        if s is None:
-            vault = None
-            path = self._vault_path(sid)
-            if path and path.exists():
-                vault = Vault.load(path, self.config.vault_key)
-            s = Session(policy, vault, known=self.config.known, session_id=sid, release_log=self.log_for(sid))
-            self.sessions[sid] = s
-            while len(self.sessions) > self.config.max_sessions:
-                self.sessions.popitem(last=False)
-        else:
-            self.sessions.move_to_end(sid)
-            s.policy = policy if policy.digest == s.policy.digest else s.policy.tighten(policy)
-        return s
-
-    def _vault_path(self, sid: str) -> Path | None:
-        if not self.config.vault_dir or not self.config.vault_key:
-            return None
-        return Path(self.config.vault_dir) / f"{_file_id(sid)}.vault"
-
-    def save(self, s: Session) -> None:
-        path = self._vault_path(s.id)
-        if path:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            s.vault.save(path, self.config.vault_key)
-
-    def log_for(self, sid: str) -> EgressLog | None:
-        if not self.config.log_dir:
-            return None
-        if sid not in self.logs:
-            self.logs[sid] = EgressLog(Path(self.config.log_dir) / _file_id(sid), self.signer, self.config.store_payloads)
-        return self.logs[sid]
-
-    # Request bodies
+        return self.policy_named(name)
 
     @staticmethod
     def source_for(request: Request) -> Source | None:
         sender = request.headers.get("x-opn-source-sender")
         site = request.headers.get("x-opn-source-site")
         return Source(sender=sender, site=site) if sender or site else None
-
-    @staticmethod
-    def mask_body(s: Session, body: dict, source: Source | None) -> dict:
-        """Mask the whole request body. Chat histories go through mask_messages so handle notes land in the message
-        that mentions them; every other field (system prompts, documents, names, metadata, tool descriptions) is
-        masked too, leaving only structural keys and base64 blobs alone.
-
-        Two passes: a name learned late in the body (in a message) may also appear earlier (in the system prompt)
-        without any cue, so the second pass, with everything learned, catches it. Stand-ins do not change between
-        passes because they come from the vault."""
-        out = body
-        for _ in range(2):
-            out = Proxy._mask_once(s, body, source)
-        return out
-
-    @staticmethod
-    def _mask_once(s: Session, body: dict, source: Source | None) -> dict:
-        out = {}
-        for key, value in body.items():
-            if key in SKIP_KEYS or key in TOP_KEYS:
-                out[key] = value  # structure such as the model name; the egress check still reads it
-            elif key in ("messages", "input") and isinstance(value, list):
-                out[key], _ = s.mask_messages(value, source)
-            elif key == "input" and isinstance(value, str):
-                m = s.mask(value, source)
-                out[key] = m.text + ("\n\n" + "\n".join("Note: " + n for n in m.notes) if m.notes else "")
-            elif key in ("system", "instructions") and isinstance(value, str):
-                m = s.mask(value, source)
-                out[key] = m.text + ("\n\n" + "\n".join("Note: " + n for n in m.notes) if m.notes else "")
-            else:
-                out[key], _ = s.mask_value(value, source)
-        return out
-
-    # Restoring
-
-    def restore_args(self, s: Session, tool: str, args: Any) -> Any:
-        """Tool-call arguments on their way back to the app.
-
-        Fakes always turn back into real values. Handles are filled in only for tools listed in `fill_tools`, and
-        only if the binding allows that tool's site; otherwise they stay as {{handles}} for the app to resolve.
-        JSON strings are parsed first, so a real value with a quote in it cannot break the JSON.
-        """
-        if isinstance(args, str):
-            try:
-                parsed = json.loads(args)
-            except ValueError:
-                return s.restore_keep_handles(args)
-            return json.dumps(self.restore_args(s, tool, parsed), ensure_ascii=False)
-        if HANDLE.search(json.dumps(args)) and tool in self.config.fill_tools:
-            try:
-                return s.resolve_args(args, Sink(tool=tool, site=self.config.fill_tools[tool])).args
-            except HandleRefused:
-                pass
-        return s.restore_keep_handles(args)
-
-    def restore_chat(self, s: Session, data: dict) -> dict:
-        for choice in data.get("choices") or []:
-            msg = choice.get("message") or {}
-            if isinstance(msg.get("content"), str):
-                msg["content"] = s.restore(msg["content"])
-            for call in msg.get("tool_calls") or []:
-                fn = call.get("function") or {}
-                if isinstance(fn.get("arguments"), str):
-                    fn["arguments"] = self.restore_args(s, fn.get("name", ""), fn["arguments"])
-        return data
-
-    def restore_anthropic(self, s: Session, data: dict) -> dict:
-        for block in data.get("content") or []:
-            if block.get("type") == "text":
-                block["text"] = s.restore(block["text"])
-            elif block.get("type") == "tool_use":
-                block["input"] = self.restore_args(s, block.get("name", ""), block.get("input"))
-        return data
-
-    def restore_responses(self, s: Session, data: dict) -> dict:
-        for item in data.get("output") or []:
-            if item.get("type") == "message":
-                for part in item.get("content") or []:
-                    if isinstance(part.get("text"), str):
-                        part["text"] = s.restore(part["text"])
-            elif item.get("type") == "function_call" and isinstance(item.get("arguments"), str):
-                item["arguments"] = self.restore_args(s, item.get("name", ""), item["arguments"])
-        if isinstance(data.get("output_text"), str):
-            data["output_text"] = s.restore(data["output_text"])
-        return data
 
     # Streams
 
@@ -477,11 +348,6 @@ def create_app(config: ProxyConfig | None = None) -> Starlette:
     ])
     app.state.proxy = proxy
     return app
-
-
-def _file_id(sid: str) -> str:
-    """A file-safe name for a session id that cannot collide (a.b and ab stay apart)."""
-    return hashlib.sha256(sid.encode("utf-8")).hexdigest()[:32]
 
 
 def default_key_dir() -> Path:

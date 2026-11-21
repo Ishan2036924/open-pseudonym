@@ -68,12 +68,13 @@ keyed tokens for logs.
 | Core | `pip install open-pseudonym` | `npm install open-pseudonym` |
 | Local proxy | `pip install "open-pseudonym[proxy]"` | |
 | MCP middleware and gateway | `pip install "open-pseudonym[mcp]"` | |
+| LiteLLM proxy guardrail | `pip install "open-pseudonym[litellm]"` | |
 | Browser handle filler | `pip install "open-pseudonym[browser]"` | |
 | Vercel AI SDK | | `open-pseudonym/vercel-ai` |
 
 The core needs only `cryptography` (Python) or nothing (TypeScript).
 
-## Three ways in
+## Four ways in
 
 **1. In your code.**
 
@@ -116,6 +117,23 @@ opn mcp-gateway --profile browse_and_fill --source-site example.com \
 
 `--tool-site` is for tools whose target never changes. A browser tool can be steered to any page, so browsers fill
 handles with `HandleFiller`, which reads the real page URL at the moment it types.
+
+**4. LiteLLM.** Already running a [LiteLLM](https://github.com/BerriAI/litellm) proxy? Add the guardrail to its
+`config.yaml` and every app behind it is covered: requests masked and checked before the model, checked again after
+routing, answers restored (streams too), signed receipts per attempt.
+
+```yaml
+guardrails:
+  - guardrail_name: open-pseudonym
+    litellm_params:
+      guardrail: open_pseudonym.litellm.OpenPseudonymGuardrail
+      mode: [pre_call, post_call]
+      default_on: true
+      profile: draft_reply
+```
+
+Call types it cannot protect are refused rather than passed through. Details, options and limits:
+[guides/litellm.md](guides/litellm.md).
 
 ## Who allowed it: release records and checkpoints
 
@@ -221,7 +239,7 @@ names your app already knows (`known={"PERSON": contacts}`) or add an ML detecto
 spaCy or Presidio). The model run (task accuracy on clear text, tags,
 redaction and stand-ins, plus re-identification) is in `bench/run.py model`; results are not published yet.
 
-## Known limits (alpha 0.3)
+## Known limits (alpha 0.4)
 
 - Names are found by cues (greetings, titles, headers, role words), by a list of about 1,150 given names, or because
   your app lists them. A name that is not on the list and has no cue, a name written in lower case ("talk to dana"),
@@ -237,6 +255,8 @@ redaction and stand-ins, plus re-identification) is in `bench/run.py model`; res
 - A release record proves who allowed a secret to be filled in, and when, not that the value reached only that site.
 - Ordinary personal data is restored into any tool call; handles are the part that resists prompt injection.
 - The proxy has no login and is meant for one person on their own machine.
+- The LiteLLM guardrail signs what LiteLLM hands its provider adapter, not the wire bytes, and LiteLLM's own logs keep
+  the original request (guides/litellm.md says how to turn that off).
 - Model-based quality results are not published yet.
 
 ## What it is, and is not

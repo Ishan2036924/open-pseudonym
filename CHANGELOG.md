@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 (2026-11-21)
+
+A LiteLLM proxy guardrail, so any app behind a LiteLLM proxy gets Open Pseudonym from a few lines of `config.yaml`.
+No change to the wire format, the vectors or the TypeScript SDK (its version moves with the Python one).
+
+### Added
+
+- **LiteLLM guardrail** (`open_pseudonym.litellm.OpenPseudonymGuardrail`, extra `[litellm]`, spec 12.3,
+  `guides/litellm.md`): masks every model-bound field before the call and runs the egress check; checks the final
+  request again after routing, just before each provider attempt, and signs one receipt per attempt naming the
+  deployment's host; restores answers and streams (tool-call arguments buffered until complete) into copies, never
+  into objects LiteLLM caches; fills handles only for `fill_tools`, with release records. Chat Completions, Responses,
+  Anthropic Messages and embeddings are handled; other call types are refused unless listed in `skip_call_types`.
+  Sessions are keyed by the caller's LiteLLM identity plus `x-opn-session`. Tested with LiteLLM 1.108.x, end to end
+  through the real proxy against a fake model that records the bytes it received, with planted-defect tests for the
+  egress check and the second check.
+
+### Changed
+
+- The HTTP-free half of the proxy (sessions, vault files, receipt logs, body masking and restoring) moved to
+  `open_pseudonym.gateway.Gateway`; `Proxy` builds on it and behaves as before. Logs of sessions dropped from the
+  session cache are now dropped too (they are reopened from disk when needed).
+
 ## 0.3.0 (2026-11-20)
 
 Who allowed each secret to be filled in, and a way to show a log was not cut short. Spec v0.3. Everything 0.2 wrote
