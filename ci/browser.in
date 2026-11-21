@@ -5,4 +5,5 @@ cryptography>=42
 playwright==1.58.0
 pytest>=8
 anyio>=4
+hypothesis>=6.100
 setuptools>=77

@@ -38,8 +38,8 @@ OCTET = "(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
 # patterns keep the narrower sets above.
 UPX = UP + "ĀĂĄĆĈĊČĎĐĒĔĖĘĚĜĞĠĢĤĦĨĪĬĮİĴĶĹĻĽĿŁŃŅŇŌŎŐŒŔŖŘŚŜŞŠŢŤŦŨŪŬŮŰŲŴŶŸŹŻŽ"
 LOX = LO + "ā-žạ-ỹ"
-NBX = f"(?<![A-Za-z0-9_À-ÖØ-öø-ÿĀ-žẠ-ỹ])"
-NAX = f"(?![A-Za-z0-9_À-ÖØ-öø-ÿĀ-žẠ-ỹ])"
+NBX = "(?<![A-Za-z0-9_À-ÖØ-öø-ÿĀ-žẠ-ỹ])"
+NAX = "(?![A-Za-z0-9_À-ÖØ-öø-ÿĀ-žẠ-ỹ])"
 NAMEX = f"[{UPX}][{LOX}]*(?:'[{UPX}])?[{LOX}]+(?:-[{UPX}]?[{LOX}]+)?"
 POOLS = json.loads((Path(__file__).resolve().parent.parent / "data" / "pools.json").read_text(encoding="utf-8"))
 

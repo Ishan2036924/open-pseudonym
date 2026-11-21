@@ -10,6 +10,9 @@ openai>=1.50
 anthropic>=0.40
 pytest>=8
 anyio>=4
+hypothesis>=6.100
 jsonschema>=4.18
 build>=1.2
 setuptools>=77
+# lint (CI runs `ruff check .` with this pin)
+ruff>=0.15
