@@ -7,6 +7,8 @@ PY="${PYTHON:-python3}"
 PYTHONPATH=sdk/python/src "$PY" -m open_pseudonym.conformance vectors
 (cd sdk/python && "$PY" -m pytest -q)  # parts whose extras are missing are skipped
 if "$PY" -c "import jsonschema" 2>/dev/null; then "$PY" tools/check_schemas.py; else echo "skip: schemas (pip install jsonschema)"; fi
+"$PY" tools/test_fetch_published.py 2>&1 | tail -1  # release signing takes only bytes matching the registries' digests
+if "$PY" -c "import tomllib" 2>/dev/null; then "$PY" tools/check_ci_locks.py && "$PY" tools/test_check_ci_locks.py 2>&1 | tail -1; else echo "skip: CI lock check (Python 3.11+)"; fi
 "$PY" bench/run.py offline --out /tmp/opn-offline.md > /dev/null && echo "bench offline: ok"
 if [ -d sdk/typescript/node_modules/typescript ]; then
   (cd sdk/typescript && npm run build --silent && node src/conformance.ts ../../vectors && node dist/conformance.js ../../vectors && npm test --silent)
