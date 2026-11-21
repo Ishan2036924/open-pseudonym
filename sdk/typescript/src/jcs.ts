@@ -16,8 +16,10 @@ function encode(v: unknown): string {
     if (!Number.isSafeInteger(v)) throw new RangeError("integers in signed objects must fit in 53 bits");
     return String(v);
   }
-  if (Array.isArray(v)) return "[" + v.map(encode).join(",") + "]";
+  // Array.from visits holes as undefined, which is refused; map would skip them and write "[1,,2]"
+  if (Array.isArray(v)) return "[" + Array.from(v, encode).join(",") + "]";
   if (typeof v === "object" && v !== undefined) {
+    plainObject(v);
     const obj = v as Record<string, unknown>;
     const keys = Object.keys(obj).sort();
     return "{" + keys.map((k) => JSON.stringify(k) + ":" + encode(obj[k])).join(",") + "}";
@@ -33,6 +35,13 @@ export function canonicalArgs(value: unknown): Buffer {
   return Buffer.from(encodeLoose(value), "utf-8");
 }
 
+/** A Date, Map, Set, typed array or boxed string is not a JSON object, though Object.keys would make it look like one;
+ * Python refuses them too. */
+function plainObject(v: object): void {
+  const tag = Object.prototype.toString.call(v);
+  if (tag !== "[object Object]") throw new TypeError(`cannot sign a ${tag.slice(8, -1)}`);
+}
+
 function wellFormed(s: string): string {
   // a lone surrogate is not text: refuse it, as the Python SDK does (JSON.stringify would escape it instead)
   if (!s.isWellFormed()) throw new TypeError("a lone surrogate is not text");
@@ -45,8 +54,9 @@ function encodeLoose(v: unknown): string {
     if (!Number.isFinite(v)) throw new TypeError("NaN and infinity are not JSON");
     return Object.is(v, -0) ? "0" : String(v);
   }
-  if (Array.isArray(v)) return "[" + v.map(encodeLoose).join(",") + "]";
+  if (Array.isArray(v)) return "[" + Array.from(v, encodeLoose).join(",") + "]";
   if (v !== null && typeof v === "object") {
+    plainObject(v);
     const obj = v as Record<string, unknown>;
     return "{" + Object.keys(obj).sort().map((k) => JSON.stringify(wellFormed(k)) + ":" + encodeLoose(obj[k])).join(",") + "}";
   }
