@@ -62,6 +62,16 @@ handle, the tool, the site as a host, a digest of the call with the handle still
 (`shown`), and never the value or a hash of it. If the log cannot be written, the call is refused with `not_recorded`
 and nothing is filled. See spec 10.4.
 
+When a binding or a policy rule decided, and no person did, the record also names its standing: `authority.rule`, the
+rule that made the handle (`/rules/OTP`, or `/default`), and `authority.policy`, the digest of that policy (the same
+digest egress receipts carry). `verify_log(folder, pub, policies=[policy])` (`opn verify --policy browse_and_fill`)
+checks both against the policy you give it.
+
+If the same tool call also carries Sensitive References that your host resolved with their server, pass the `audit_id`
+the server returned: `s.resolve_args(args, sink, audit_id="evt_01JD8Z")`. Every release record of that call carries it,
+so the server's audit event and your records join. It must be 1 to 128 characters of `A-Z a-z 0-9 . _ -`; anything else
+raises before anything is filled. See spec 10.5.
+
 A release record proves a decision and who made it. It does not prove the value stayed at that site.
 
 ## Rules of thumb

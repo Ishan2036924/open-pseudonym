@@ -43,6 +43,10 @@ Things to know:
   and fills a secret handle only where its binding allows. Otherwise it throws `HandleRefused`. Give a tool a fixed
   `site` only when it always acts on one target; a browser tool can be steered to any page, so resolve with the
   page's real URL at the moment of filling.
+- Release records: with a `releaseLog`, each fill or refusal is signed into the log first, with who allowed it. A
+  decision no person made names its standing (`authority.rule`, `authority.policy`), which
+  `verifyLog(folder, publicKey, null, { policies: [policy] })` checks. If the call also carries Sensitive References
+  your host resolved, pass the server's audit id: `session.resolveArgs(args, sink, { auditId })` (spec 10.4, 10.5).
 - Handles are bound to the exact host they came from: a code mailed by `no-reply@acme.com` fills on `acme.com`, not
   on `docs.acme.com`, where anyone may host a form. A policy can allow subdomains on purpose by writing the site as
   `*.acme.com` in a handle rule's `sites`; it is never inferred. A secret whose source you did not state (no
