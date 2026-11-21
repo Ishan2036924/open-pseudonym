@@ -44,7 +44,7 @@ test("rstripDots and stripWs keep Python's rstrip('.') and strip() results", () 
   for (const [s, want] of [["", ""], ["...", ""], ["a.b..", "a.b"], ["a", "a"], [".a.", ".a"]] as const) {
     assert.equal(rstripDots(s), want);
   }
-  for (const [s, want] of [["", ""], ["  ", ""], ["  a b\t\n", "a b"], ["　x ", "x"], ["a", "a"]] as const) {
+  for (const [s, want] of [["", ""], ["  ", ""], ["\u00a0 a b\t\n", "a b"], ["\u3000x\u2029", "x"], ["a", "a"]] as const) {
     assert.equal(stripWs(s), want);
   }
 });
